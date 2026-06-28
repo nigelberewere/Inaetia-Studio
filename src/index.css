@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cinema-bg: #080810;
+  --color-cinema-card: #10101E;
+  --color-cinema-amber: #F5A623;
+  --color-cinema-text: #E8E0D0;
+  --color-cinema-muted: #6A6A8A;
+  --color-cinema-border: #1A1A2E;
+  
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background-color: var(--color-cinema-bg);
+  color: var(--color-cinema-text);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Geometric Balance Custom Styles */
+.movie-card-hover {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.movie-card-hover:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(245, 166, 35, 0.3);
+  border-color: var(--color-cinema-amber) !important;
+}
+
+/* Custom scrollbars for a premium cinematic layout */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080810;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e1e32;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f5a623;
+}
+
+/* Horizontal scrollable rows */
+.horizontal-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 1.5rem;
+  padding-bottom: 1rem;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}

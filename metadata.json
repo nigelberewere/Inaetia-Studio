@@ -1,0 +1,6 @@
+{
+  "name": "NigelCloud Cinema",
+  "description": "A full-stack offline-capable home media streaming web application for local network servers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
