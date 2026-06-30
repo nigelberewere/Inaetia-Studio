@@ -49,7 +49,7 @@ interface AppContextType {
   profiles: Profile[];
   loadingProfiles: boolean;
   fetchProfiles: () => Promise<void>;
-  createProfile: (name: string, color: string) => Promise<Profile>;
+  createProfile: (name: string, color: string, avatar: string) => Promise<Profile>;
   deleteProfile: (id: string) => Promise<void>;
   clearProfileHistory: () => Promise<void>;
   continueWatching: WatchHistoryItem[];
@@ -84,11 +84,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Create a new profile
-  const createProfile = async (name: string, color: string): Promise<Profile> => {
+  const createProfile = async (name: string, color: string, avatar: string): Promise<Profile> => {
     const res = await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color }),
+      body: JSON.stringify({ name, color, avatar }),
     });
     if (!res.ok) {
       throw new Error("Failed to create profile");

@@ -9,6 +9,9 @@ import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
+const DEMO_MODE = process.env.DEMO_MODE === "true";
+console.log(`🎬 NigelCloud Cinema Startup: DEMO_MODE is ${DEMO_MODE ? "ON" : "OFF"}`);
+
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
@@ -27,10 +30,38 @@ const VIDEOS_PATH = process.env.VIDEOS_PATH || "/mnt/storage/Videos";
 const MUSIC_PATH = process.env.MUSIC_PATH || "/mnt/storage/Music";
 const PICTURES_PATH = process.env.PICTURES_PATH || "/mnt/storage/Pictures";
 
+// Validate Environment Variables and Path Existence in Production
+if (!DEMO_MODE) {
+  const requiredPaths = { VIDEOS_PATH, MUSIC_PATH, PICTURES_PATH };
+  Object.entries(requiredPaths).forEach(([key, val]) => {
+    if (!val) {
+      console.warn(`⚠️  WARNING: ${key} environment variable is not defined.`);
+    } else if (!fs.existsSync(val)) {
+      console.warn(`⚠️  WARNING: ${key} points to a non-existent path: "${val}". Please check your drive mounting and server configuration.`);
+    } else {
+      console.log(`✅ ${key} is valid and exists: "${val}"`);
+    }
+  });
+}
+
+// Isolated demo folders
+const demoVideosDir = path.join(process.cwd(), "demo-media/Videos");
+const demoMusicDir = path.join(process.cwd(), "demo-media/Music");
+const demoPicturesDir = path.join(process.cwd(), "demo-media/Pictures");
+
 // Determine which folders to scan. Use workspace fallbacks if system mount is unavailable.
-const targetVideosDir = fs.existsSync(VIDEOS_PATH) ? VIDEOS_PATH : path.join(process.cwd(), "media/Videos");
-const targetMusicDir = fs.existsSync(MUSIC_PATH) ? MUSIC_PATH : path.join(process.cwd(), "media/Music");
-const targetPicturesDir = fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures");
+const targetVideosDir = DEMO_MODE
+  ? demoVideosDir
+  : (fs.existsSync(VIDEOS_PATH) ? VIDEOS_PATH : path.join(process.cwd(), "media/Videos"));
+
+const targetMusicDir = DEMO_MODE
+  ? demoMusicDir
+  : (fs.existsSync(MUSIC_PATH) ? MUSIC_PATH : path.join(process.cwd(), "media/Music"));
+
+const targetPicturesDir = DEMO_MODE
+  ? demoPicturesDir
+  : (fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures"));
+
 const thumbsCacheDir = "/tmp/nigelcloud/thumbs";
 
 // Ensure folders exist
@@ -62,8 +93,67 @@ const moviesIndex = new Map<string, string>(); // id -> full filepath
 const musicIndex = new Map<string, string>();  // id -> full filepath
 const photosIndex = new Map<string, string>(); // id -> full filepath
 
+const METADATA_CACHE_FILE = path.join(process.cwd(), "media-cache.json");
+
+function loadPersistentCache() {
+  try {
+    if (fs.existsSync(METADATA_CACHE_FILE)) {
+      console.log(`💾 Loading metadata cache from disk: ${METADATA_CACHE_FILE}...`);
+      const raw = fs.readFileSync(METADATA_CACHE_FILE, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed) {
+        moviesCache = parsed.moviesCache || [];
+        musicCache = parsed.musicCache || [];
+        photosCache = parsed.photosCache || [];
+        cachesLastUpdated = parsed.cachesLastUpdated || Date.now();
+        
+        // Re-populate indices
+        if (parsed.moviesIndexList) {
+          parsed.moviesIndexList.forEach(([id, file]: [string, string]) => moviesIndex.set(id, file));
+        }
+        if (parsed.musicIndexList) {
+          parsed.musicIndexList.forEach(([id, file]: [string, string]) => musicIndex.set(id, file));
+        }
+        if (parsed.photosIndexList) {
+          parsed.photosIndexList.forEach(([id, file]: [string, string]) => photosIndex.set(id, file));
+        }
+        console.log(`💾 Metadata cache loaded successfully! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}, Photos: ${photosCache.length}`);
+      }
+    } else {
+      console.log("💾 No persistent metadata cache file found. Will perform a full scan on startup.");
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to load persistent metadata cache:", err);
+  }
+}
+
+function savePersistentCache() {
+  try {
+    const dataToSave = {
+      moviesCache,
+      musicCache,
+      photosCache,
+      cachesLastUpdated,
+      moviesIndexList: Array.from(moviesIndex.entries()),
+      musicIndexList: Array.from(musicIndex.entries()),
+      photosIndexList: Array.from(photosIndex.entries()),
+    };
+    fs.writeFileSync(METADATA_CACHE_FILE, JSON.stringify(dataToSave, null, 2), "utf8");
+    console.log(`💾 Metadata cache saved to disk: ${METADATA_CACHE_FILE}`);
+  } catch (err) {
+    console.error("⚠️ Failed to save persistent metadata cache:", err);
+  }
+}
+
+// Load cache immediately on server startup
+loadPersistentCache();
+
 // Generate mock media files if folder is empty so app works immediately in preview
 function generateMockMedia() {
+  if (!DEMO_MODE) {
+    console.log("Production Mode: Demo media generation is disabled.");
+    return;
+  }
   exec("ffmpeg -version", (err) => {
     if (err) {
       console.log("ffmpeg not detected, skipping mock media generation.");
@@ -185,6 +275,10 @@ function getFilesRecursively(dir: string, allowedExtensions: string[]): string[]
   try {
     const list = fs.readdirSync(dir);
     list.forEach((file) => {
+      // Skip files or directories starting with "." (e.g. macOS "._" files, .DS_Store, etc.)
+      if (file.startsWith(".")) {
+        return;
+      }
       const fullPath = path.join(dir, file);
       const stat = fs.statSync(fullPath);
       if (stat && stat.isDirectory()) {
@@ -202,29 +296,72 @@ function getFilesRecursively(dir: string, allowedExtensions: string[]): string[]
   return results;
 }
 
+// Throttled ffprobe queue to avoid crashing server on massive libraries
+interface FfprobeTask {
+  filepath: string;
+  resolve: (duration: number) => void;
+}
+
+const ffprobeQueue: FfprobeTask[] = [];
+let activeFfprobes = 0;
+const MAX_CONCURRENT_FFPROBES = 3;
+
+function processFfprobeQueue() {
+  if (activeFfprobes >= MAX_CONCURRENT_FFPROBES || ffprobeQueue.length === 0) {
+    return;
+  }
+
+  const task = ffprobeQueue.shift();
+  if (!task) return;
+
+  activeFfprobes++;
+  exec(
+    `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${task.filepath}"`,
+    (err, stdout) => {
+      activeFfprobes--;
+      
+      let duration = 120; // Default
+      if (!err && stdout) {
+        const parsed = parseFloat(stdout.trim());
+        if (!isNaN(parsed)) {
+          duration = Math.round(parsed);
+        }
+      }
+      task.resolve(duration);
+
+      // Process next in queue
+      processFfprobeQueue();
+    }
+  );
+
+  // Attempt to fill remaining concurrency slots
+  processFfprobeQueue();
+}
+
 // Helper to probe file duration using ffprobe with safe fallback
 function getDuration(filepath: string): Promise<number> {
   return new Promise((resolve) => {
-    exec(
-      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filepath}"`,
-      (err, stdout) => {
-        if (err || !stdout) {
-          // If probe fails, return an estimated duration or default (120 seconds)
-          // Estimating based on standard bitrates can be done, but a clean default is safer
-          resolve(120);
-        } else {
-          const parsed = parseFloat(stdout.trim());
-          resolve(isNaN(parsed) ? 120 : Math.round(parsed));
-        }
-      }
-    );
+    ffprobeQueue.push({ filepath, resolve });
+    processFfprobeQueue();
   });
 }
 
 // Rescan Libraries
 async function scanAllLibraries() {
+  const startTime = Date.now();
   console.log("Scanning libraries...");
   ensureDirs();
+
+  // Create fast lookup maps of existing cache items to reuse duration
+  const existingMoviesMap = new Map<string, any>();
+  moviesCache.forEach((m) => {
+    if (m && m.filepath) existingMoviesMap.set(m.filepath, m);
+  });
+
+  const existingMusicMap = new Map<string, any>();
+  musicCache.forEach((m) => {
+    if (m && m.filepath) existingMusicMap.set(m.filepath, m);
+  });
 
   // 1. Scan Movies
   const videoExts = [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
@@ -241,7 +378,15 @@ async function scanAllLibraries() {
     moviesIndex.set(id, file);
 
     const stat = fs.statSync(file);
-    const duration = await getDuration(file);
+    let duration = 120;
+
+    // Fast cache lookup
+    const cachedItem = existingMoviesMap.get(relativePath);
+    if (cachedItem && cachedItem.size === stat.size) {
+      duration = cachedItem.duration;
+    } else {
+      duration = await getDuration(file);
+    }
 
     // Mock file size for our HD Intro to satisfy user's > 2GB check in UI
     let size = stat.size;
@@ -279,7 +424,15 @@ async function scanAllLibraries() {
     musicIndex.set(id, file);
 
     const stat = fs.statSync(file);
-    const duration = await getDuration(file);
+    let duration = 120;
+
+    // Fast cache lookup
+    const cachedItem = existingMusicMap.get(relativePath);
+    if (cachedItem && cachedItem.size === stat.size) {
+      duration = cachedItem.duration;
+    } else {
+      duration = await getDuration(file);
+    }
 
     // Derive Artist and Album from Directory Structure: /Artist/Album/File.mp3
     const parts = relativePath.split(path.sep);
@@ -334,28 +487,68 @@ async function scanAllLibraries() {
   photosCache = await Promise.all(photoPromises);
   cachesLastUpdated = Date.now();
 
-  console.log(`Scan completed! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}, Photos: ${photosCache.length}`);
+  savePersistentCache();
+
+  const durationMs = Date.now() - startTime;
+  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}, Photos: ${photosCache.length} (DEMO_MODE: ${DEMO_MODE ? "ON" : "OFF"})`);
 }
+
+// Throttled scan execution guard to prevent overlapping concurrent scans
+let scanInProgress: Promise<void> | null = null;
+
+async function triggerScan(): Promise<void> {
+  if (scanInProgress) {
+    console.log("Scan request received while a scan is already running. Awaiting the in-flight scan...");
+    return scanInProgress;
+  }
+
+  scanInProgress = (async () => {
+    try {
+      await scanAllLibraries();
+    } catch (err) {
+      console.error("Scan failed:", err);
+    } finally {
+      scanInProgress = null;
+    }
+  })();
+
+  return scanInProgress;
+}
+
+// Configurable background rescan interval (default 30 minutes)
+const RESCAN_INTERVAL_MINUTES = parseInt(process.env.RESCAN_INTERVAL_MINUTES || "30", 10);
+const RESCAN_INTERVAL_MS = RESCAN_INTERVAL_MINUTES * 60 * 1000;
+console.log(`⏰ Periodic background rescan interval set to ${RESCAN_INTERVAL_MINUTES} minutes.`);
 
 // Auto scan on startup
 setTimeout(async () => {
   generateMockMedia();
   // Delay initial scan slightly to let ffmpeg process finished files
   setTimeout(() => {
-    scanAllLibraries().catch(console.error);
+    triggerScan().catch(console.error);
   }, 1000);
 }, 500);
 
-// Periodically refresh cache (every 5 minutes)
+// Periodically refresh cache (configurable background timer)
 setInterval(() => {
-  scanAllLibraries().catch(console.error);
-}, CACHE_LIFETIME);
+  console.log("Starting scheduled background library scan...");
+  triggerScan().catch(console.error);
+}, RESCAN_INTERVAL_MS);
 
-// Check if caches need manual or automatic reload
+// Check if caches need manual or automatic reload (remains lightweight and non-blocking)
 async function checkCache() {
-  if (Date.now() - cachesLastUpdated > CACHE_LIFETIME || moviesCache.length === 0) {
-    await scanAllLibraries();
+  if (moviesCache.length > 0 || musicCache.length > 0 || photosCache.length > 0) {
+    // If the cache is stale, trigger a scan in the background asynchronously, but do NOT block current requests!
+    if (Date.now() - cachesLastUpdated > CACHE_LIFETIME) {
+      console.log("⏱️ Cache is stale, triggering background rescan without blocking user response.");
+      triggerScan().catch(console.error);
+    }
+    return;
   }
+
+  // Only block the request if there is absolutely no cache data anywhere
+  console.log("⚠️ No cache data found in memory. Performing a blocking initial scan...");
+  await triggerScan();
 }
 
 // ==========================================
@@ -395,18 +588,18 @@ app.get("/api/profiles", (req, res) => {
 
 // POST /api/profiles
 app.post("/api/profiles", (req, res) => {
-  const { name, color } = req.body;
+  const { name, color, avatar } = req.body;
   if (!name || !color) {
     return res.status(400).json({ error: "Name and color are required" });
   }
   const data = loadProfiles();
   if (!data.profiles) data.profiles = [];
 
-  const avatar = name.trim().charAt(0).toUpperCase() || "?";
+  const profileAvatar = avatar || (name.trim().charAt(0).toUpperCase() || "?");
   const newProfile = {
     id: crypto.randomUUID(),
     name: name.trim(),
-    avatar,
+    avatar: profileAvatar,
     color,
     createdAt: new Date().toISOString(),
     watchHistory: {},
@@ -816,7 +1009,7 @@ app.get("/api/status", async (req, res) => {
 // Force library rescan
 app.post("/api/rescan", async (req, res) => {
   try {
-    await scanAllLibraries();
+    await triggerScan();
     res.json({ success: true, movies: moviesCache.length, music: musicCache.length, photos: photosCache.length });
   } catch (err: any) {
     res.status(500).json({ error: "Rescan triggered failure", details: err.message });

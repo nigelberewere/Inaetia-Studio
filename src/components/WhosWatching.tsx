@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Plus, X, Trash2, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { ProfileAvatar, PRESET_AVATARS } from "./ProfileAvatar";
 
 const PRESET_COLORS = [
   "#F5A623", // amber
@@ -24,6 +25,7 @@ export default function WhosWatching() {
   const [isManaging, setIsManaging] = useState(false);
   const [name, setName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
+  const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -34,9 +36,10 @@ export default function WhosWatching() {
       return;
     }
     try {
-      await createProfile(name, selectedColor);
+      await createProfile(name, selectedColor, selectedAvatar);
       setName("");
       setSelectedColor(PRESET_COLORS[0]);
+      setSelectedAvatar(PRESET_AVATARS[0]);
       setIsAdding(false);
       setErrorMsg(null);
     } catch (err) {
@@ -105,7 +108,7 @@ export default function WhosWatching() {
                     e.currentTarget.style.boxShadow = '';
                   }}
                 >
-                  {profile.avatar}
+                  <ProfileAvatar avatar={profile.avatar} className="w-14 h-14 text-white" />
 
                   {/* Custom Confirmation Overlay */}
                   <AnimatePresence>
@@ -177,12 +180,21 @@ export default function WhosWatching() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   onSubmit={handleCreate}
-                  className="bg-[#10101F] border border-cinema-border rounded-2xl p-5 w-72 text-left space-y-4 shadow-xl z-10"
+                  className="bg-[#10101F] border border-cinema-border rounded-2xl p-5 w-80 md:w-96 text-left space-y-4 shadow-xl z-10"
                   id="add-profile-form"
                 >
                   <div className="flex justify-between items-center border-b border-cinema-border pb-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-cinema-amber">Add New Profile</span>
-                    <button type="button" onClick={() => setIsAdding(false)} className="text-zinc-500 hover:text-white">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsAdding(false);
+                        setName("");
+                        setSelectedAvatar(PRESET_AVATARS[0]);
+                        setSelectedColor(PRESET_COLORS[0]);
+                      }} 
+                      className="text-zinc-500 hover:text-white"
+                    >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -202,6 +214,35 @@ export default function WhosWatching() {
                       className="w-full bg-[#070712] border border-cinema-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cinema-amber"
                       autoFocus
                     />
+                  </div>
+
+                  {/* Avatar Selector */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-bold uppercase text-zinc-500 tracking-wider">Choose Avatar Icon</label>
+                      <span className="text-[10px] font-mono text-cinema-amber bg-cinema-amber/10 px-1.5 py-0.5 rounded">{selectedAvatar}</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-black/40 border border-cinema-border/50 rounded-xl">
+                      {PRESET_AVATARS.map((avatarName) => {
+                        const isSelected = selectedAvatar === avatarName;
+                        return (
+                          <button
+                            key={avatarName}
+                            type="button"
+                            onClick={() => setSelectedAvatar(avatarName)}
+                            className={`aspect-square rounded-lg flex items-center justify-center p-1.5 transition-all outline-none
+                              ${isSelected 
+                                ? "bg-cinema-amber text-cinema-bg scale-105 shadow-md font-bold" 
+                                : "bg-[#070712]/60 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                              }
+                            `}
+                            title={avatarName}
+                          >
+                            <ProfileAvatar avatar={avatarName} className="w-4.5 h-4.5" />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Color Selector */}
@@ -242,6 +283,8 @@ export default function WhosWatching() {
                         setIsAdding(false);
                         setErrorMsg(null);
                         setName("");
+                        setSelectedAvatar(PRESET_AVATARS[0]);
+                        setSelectedColor(PRESET_COLORS[0]);
                       }}
                       className="flex-1 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition-all"
                     >

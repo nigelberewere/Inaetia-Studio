@@ -20,6 +20,13 @@ fi
 INSTALL_DIR=$(pwd)
 echo "📂 Project Directory: $INSTALL_DIR"
 
+# Wait for dpkg/apt lock frontends to be released (unattended-upgrades, other apt runs, etc.)
+echo "⏳ Checking for lock on dpkg/apt frontend..."
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+  echo "Waiting for other apt or unattended-upgrades process to release package locks..."
+  sleep 5
+done
+
 # Install System Dependencies (ffmpeg, node, npm)
 echo "📦 Verifying system packages (ffmpeg, nodejs, npm)..."
 if ! command -v ffmpeg &> /dev/null; then
@@ -31,14 +38,20 @@ fi
 
 if ! command -v node &> /dev/null; then
   echo "Installing Node.js..."
-  curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 else
   echo "✔ Node.js is already installed ($(node -v))"
 fi
 
-# Build Project
+# Build Project with Native-Binary and Cross-Platform Safety
 echo "🏗️ Installing dependencies and building production bundle..."
+# If node_modules was copied from Windows PC, Native Node Addons (like tailwindcss oxide binary) will be broken.
+# We proactively detect this and run a clean installation.
+if [ -d "node_modules" ]; then
+  echo "🧹 Cleaning previous node_modules folder to prevent platform-specific native binary conflicts..."
+  rm -rf node_modules package-lock.json
+fi
 npm install
 npm run build
 
@@ -69,7 +82,7 @@ echo "⚙️ Provisioning systemd service at /etc/systemd/system/nigelcloud-cine
 cat <<EOF > /etc/systemd/system/nigelcloud-cinema.service
 [Unit]
 Description=NigelCloud Cinema Media Streaming Server
-After=network.target
+After=nigelcloud.service
 
 [Service]
 Type=simple

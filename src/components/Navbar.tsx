@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useApp, ViewType } from "../context/AppContext";
 import { Search, Film, Music as MusicIcon, Image as PhotoIcon, Settings, X, Users, Trash2 } from "lucide-react";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 export default function Navbar() {
   const {
@@ -195,7 +196,7 @@ export default function Navbar() {
               title={`${currentProfile.name}'s Profile`}
               id="navbar-profile-avatar"
             >
-              {currentProfile.avatar}
+              <ProfileAvatar avatar={currentProfile.avatar} className="w-5 h-5 text-white" />
             </div>
 
             {showDropdown && (

@@ -32,11 +32,14 @@ Because building assets server-side can be resource-intensive and requires inter
 ## 🚀 Step 2 — Transfer to Server via SCP
 Using SSH Copy Protocol (SCP), move the completed build files from your Windows PC to the server over your local connection.
 
-Run this command in Windows PowerShell to copy the entire project directory:
+> ⚠️ **CRITICAL WARNING:** **NEVER** copy the `node_modules` directory from your Windows PC to the Ubuntu Linux server! Operating system architectural mismatches will break native compiled binaries (such as `@tailwindcss/oxide`). Always let `setup.sh` handle a clean dependencies install on the destination server.
+
+Run this command in Windows PowerShell to copy the project files (excluding `node_modules`):
 ```powershell
+# Copy the project files (excluding any local node_modules)
 scp -r C:\path\to\nigelcloud-cinema nigel@192.168.4.1:/home/nigel/
 ```
-*Alternatively, if you only need to transfer modified files individually:*
+*Alternatively, if you only need to transfer modified static assets:*
 ```powershell
 scp -r .\dist nigel@192.168.4.1:/home/nigel/nigelcloud-cinema/
 ```
