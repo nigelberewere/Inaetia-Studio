@@ -14,6 +14,7 @@ export interface Movie {
   showName?: string;
   seasonName?: string;
   episodeTitle?: string;
+  hasSubtitles?: boolean;
 }
 
 export interface Track {

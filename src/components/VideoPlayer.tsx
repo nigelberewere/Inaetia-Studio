@@ -3,7 +3,8 @@ import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
 import { 
   Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, 
-  RotateCcw, RotateCw, X, Loader2, FastForward, AlertCircle, Clock 
+  RotateCcw, RotateCw, X, Loader2, FastForward, AlertCircle, Clock,
+  Subtitles, Upload
 } from "lucide-react";
 
 interface VideoPlayerProps {
@@ -78,6 +79,49 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   useEffect(() => {
     setShowFormatWarning(isFormatUnsupported);
   }, [movie.id, isFormatUnsupported]);
+
+  // Subtitle states
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(!!movie.hasSubtitles);
+  const [customSubtitleUrl, setCustomSubtitleUrl] = useState<string | null>(null);
+  const [customSubtitleName, setCustomSubtitleName] = useState<string | null>(null);
+  const [showSubtitleMenu, setShowSubtitleMenu] = useState(false);
+
+  // Auto-enable subtitles if movie has them
+  useEffect(() => {
+    setSubtitlesEnabled(!!movie.hasSubtitles);
+    setCustomSubtitleUrl(null);
+    setCustomSubtitleName(null);
+  }, [movie.id, movie.hasSubtitles]);
+
+  const handleSubtitleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      let vttContent = text;
+      // Convert SRT to VTT if it's .srt
+      if (file.name.toLowerCase().endsWith(".srt")) {
+        let normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        const srtTimeRegex = /(\d\d:\d\d:\d\d),(\d\d\d)/g;
+        normalized = normalized.replace(srtTimeRegex, "$1.$2");
+        vttContent = "WEBVTT\n\n" + normalized;
+      } else if (!vttContent.trim().startsWith("WEBVTT")) {
+        vttContent = "WEBVTT\n\n" + vttContent;
+      }
+
+      const blob = new Blob([vttContent], { type: "text/vtt; charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+      setCustomSubtitleUrl(blobUrl);
+      setCustomSubtitleName(file.name);
+      setSubtitlesEnabled(true);
+      setShowSubtitleMenu(false);
+    };
+    reader.readAsText(file);
+  };
 
   // Next episode autoplay states
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
@@ -390,7 +434,18 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
         onEnded={handleVideoEnded}
         onClick={togglePlay}
         playsInline
-      />
+      >
+        {subtitlesEnabled && (customSubtitleUrl || movie.hasSubtitles) && (
+          <track
+            key={customSubtitleUrl || "auto-detected"}
+            kind="subtitles"
+            label={customSubtitleName || "English"}
+            src={customSubtitleUrl || `/api/subtitles/${movie.id}`}
+            srcLang="en"
+            default
+          />
+        )}
+      </video>
 
       {/* Resume Toast */}
       {showResumeToast && resumeTime !== null && (
@@ -604,6 +659,99 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
                     {rate}x
                   </button>
                 ))}
+              </div>
+
+              {/* Subtitles CC Button & Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowSubtitleMenu(!showSubtitleMenu)}
+                  className={`p-2 rounded-lg bg-white/5 border border-white/10 transition-colors flex items-center gap-1 cursor-pointer ${
+                    subtitlesEnabled && (customSubtitleUrl || movie.hasSubtitles)
+                      ? "text-cinema-amber border-cinema-amber/40 bg-cinema-amber/5"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`}
+                  title="Subtitles (CC)"
+                  id="btn-subtitles-toggle"
+                >
+                  <Subtitles className="w-4.5 h-4.5" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider px-0.5">CC</span>
+                </button>
+
+                {showSubtitleMenu && (
+                  <div 
+                    className="absolute bottom-12 right-0 bg-zinc-950/95 border border-zinc-850 rounded-xl p-3.5 shadow-2xl w-64 md:w-72 z-50 text-white flex flex-col gap-3 animate-fade-in"
+                    id="subtitles-settings-popover"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                      <span className="font-bold text-xs tracking-wide uppercase text-cinema-amber">Subtitle Settings</span>
+                      <button 
+                        onClick={() => setShowSubtitleMenu(false)}
+                        className="text-zinc-400 hover:text-white text-xs cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    {/* Toggle Subtitles */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-300 font-medium">Show Subtitles</span>
+                      <button
+                        onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
+                        className={`px-3 py-1 rounded-full font-bold text-[10px] uppercase transition-all cursor-pointer ${
+                          subtitlesEnabled 
+                            ? "bg-cinema-amber text-cinema-bg" 
+                            : "bg-white/10 text-zinc-400"
+                        }`}
+                        id="btn-toggle-subtitles-state"
+                      >
+                        {subtitlesEnabled ? "Enabled" : "Disabled"}
+                      </button>
+                    </div>
+
+                    {/* Auto-detected Subtitles Info */}
+                    <div className="bg-white/[0.02] border border-white/5 p-2 rounded-lg flex flex-col gap-1 text-[11px]">
+                      <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9px]">Server Auto-Detect</span>
+                      <div className="flex items-center gap-1.5 text-zinc-300">
+                        <span className={`w-2 h-2 rounded-full ${movie.hasSubtitles ? "bg-emerald-500" : "bg-zinc-600"}`} />
+                        <span>
+                          {movie.hasSubtitles ? "Found companion subtitle file (.srt/.vtt)" : "No matching subtitles found on server"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Custom Subtitles File Upload */}
+                    <div className="flex flex-col gap-2 border-t border-white/5 pt-2">
+                      <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9px]">Load Custom Subtitle File</span>
+                      {customSubtitleName ? (
+                        <div className="flex items-center justify-between bg-cinema-amber/10 border border-cinema-amber/20 p-2 rounded-lg text-xs">
+                          <span className="truncate text-cinema-amber max-w-[140px]" title={customSubtitleName}>
+                            {customSubtitleName}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setCustomSubtitleUrl(null);
+                              setCustomSubtitleName(null);
+                            }}
+                            className="text-xs text-rose-400 hover:text-rose-200 underline font-semibold cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center justify-center gap-2 py-2 px-3 border border-dashed border-zinc-700 hover:border-cinema-amber/40 bg-white/[0.02] hover:bg-cinema-amber/5 rounded-lg cursor-pointer transition-all text-xs text-zinc-300">
+                          <Upload className="w-3.5 h-3.5 text-cinema-amber" />
+                          <span className="font-semibold">Upload local .srt or .vtt</span>
+                          <input
+                            type="file"
+                            accept=".srt,.vtt"
+                            onChange={handleSubtitleUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Fullscreen Button */}

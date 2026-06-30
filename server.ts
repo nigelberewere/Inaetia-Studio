@@ -94,8 +94,55 @@ const CACHE_LIFETIME = 5 * 60 * 1000; // 5 minutes
 // In-memory indexing maps for stream lookup by MD5 ID
 const moviesIndex = new Map<string, string>(); // id -> full filepath
 const musicIndex = new Map<string, string>();  // id -> full filepath
+const showsFoldersIndex = new Map<string, string>(); // showNameLower -> absolute folder path
 
 const METADATA_CACHE_FILE = path.join(process.cwd(), "media-cache.json");
+
+function findShowFolderPath(file: string, showName: string): string | null {
+  const normalizedPath = file.replace(/\\/g, "/");
+  const parts = normalizedPath.split("/").filter((p) => p.length > 0);
+  const target = showName.toLowerCase().replace(/[\s_-]+/g, "");
+
+  // Find the segment that matches showName
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const partNorm = parts[i].toLowerCase().replace(/[\s_-]+/g, "");
+    if (partNorm === target) {
+      // Reconstruct absolute path up to this part
+      const fileParts = file.split(path.sep).filter((p) => p.length > 0);
+      const filePartIndex = fileParts.findIndex(
+        (fp) => fp.toLowerCase().replace(/[\s_-]+/g, "") === target
+      );
+      if (filePartIndex !== -1) {
+        const isAbsolute = file.startsWith("/");
+        const reconstructed = fileParts.slice(0, filePartIndex + 1).join(path.sep);
+        return isAbsolute ? "/" + reconstructed : reconstructed;
+      }
+    }
+  }
+
+  // Fallback: if we can't match segment, maybe the parent directory is the show folder
+  const parent = path.dirname(file);
+  const parentName = path.basename(parent).toLowerCase();
+  if (/^(season|s)\s*\d+/i.test(parentName)) {
+    return path.dirname(parent);
+  }
+  return parent;
+}
+
+function repopulateShowsFoldersIndex() {
+  showsFoldersIndex.clear();
+  moviesCache.forEach((m) => {
+    if (m.type === "episode" && m.showName) {
+      const filepath = moviesIndex.get(m.id);
+      if (filepath) {
+        const folderPath = findShowFolderPath(filepath, m.showName);
+        if (folderPath) {
+          showsFoldersIndex.set(m.showName.toLowerCase(), folderPath);
+        }
+      }
+    }
+  });
+}
 
 function loadPersistentCache() {
   try {
@@ -116,6 +163,7 @@ function loadPersistentCache() {
         if (parsed.musicIndexList) {
           parsed.musicIndexList.forEach(([id, file]: [string, string]) => musicIndex.set(id, file));
         }
+        repopulateShowsFoldersIndex();
         console.log(`💾 Metadata cache loaded successfully! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}`);
       }
     } else {
@@ -358,11 +406,12 @@ function parseVideoPath(relativePath: string, filename: string, title: string) {
   if (parts.length > 0) {
     const rootDir = parts[0];
     const rootLower = rootDir.toLowerCase();
+    const isMarvel = rootLower === "marvel movies" || rootLower === "marvel universe" || rootLower.includes("marvel");
 
     // Determine category
     if (rootLower === "cartoons") {
       category = "Cartoons";
-    } else if (rootLower === "marvel movies") {
+    } else if (isMarvel) {
       category = "Marvel Movies";
     } else if (rootLower === "movies") {
       category = "Movies";
@@ -376,10 +425,12 @@ function parseVideoPath(relativePath: string, filename: string, title: string) {
 
     // Scan for season pattern
     let seasonIndex = -1;
-    for (let i = 0; i < parts.length; i++) {
-      if (/^(season|s)\s*\d+/i.test(parts[i])) {
-        seasonIndex = i;
-        break;
+    if (rootLower !== "cartoons") {
+      for (let i = 0; i < parts.length; i++) {
+        if (/^(season|s)\s*\d+/i.test(parts[i])) {
+          seasonIndex = i;
+          break;
+        }
       }
     }
 
@@ -389,7 +440,8 @@ function parseVideoPath(relativePath: string, filename: string, title: string) {
       if (seasonIndex > 0) {
         showName = parts[seasonIndex - 1];
       }
-      if (showName.toLowerCase() === "tv shows" && seasonIndex > 1) {
+      const showLower = showName.toLowerCase();
+      if ((showLower === "tv shows" || showLower === "tv series" || showLower === "tvshows" || showLower === "series" || showLower === "shows") && seasonIndex > 1) {
         showName = parts[seasonIndex - 2];
       }
     } else {
@@ -403,20 +455,22 @@ function parseVideoPath(relativePath: string, filename: string, title: string) {
           showName = "General TV";
           seasonName = "Season 1";
         }
-      } else if (rootLower === "marvel movies" && parts[1] && parts[1].toLowerCase() === "tv shows") {
+      } else if (isMarvel && parts[1] && /^(tv shows|tv series|tvshows|series|tv|shows)$/i.test(parts[1])) {
         type = "episode";
         if (parts.length >= 4) {
           showName = parts[2];
           seasonName = "Season 1";
         } else if (parts.length === 3) {
+          showName = parts[2];
+          seasonName = "Season 1";
+        } else {
           showName = "General Marvel TV";
           seasonName = "Season 1";
         }
-      } else if (rootLower === "cartoons" && parts.length >= 3) {
-        // e.g. Cartoons/Avatar The Last Airbender/Episode 1.mp4
-        type = "episode";
-        showName = parts[1];
-        seasonName = "Season 1";
+      } else if (isMarvel) {
+        type = "movie";
+      } else if (rootLower === "cartoons") {
+        type = "movie";
       } else if (rootLower === "movies") {
         type = "movie";
       } else if (rootLower === "videos") {
@@ -524,6 +578,13 @@ async function scanAllLibraries() {
 
     const parsedMeta = parseVideoPath(relativePath, filename, title);
 
+    const dirName = path.dirname(file);
+    const baseName = path.basename(file, ext);
+    const hasSubtitles = fs.existsSync(path.join(dirName, baseName + ".srt")) ||
+                         fs.existsSync(path.join(dirName, baseName + ".SRT")) ||
+                         fs.existsSync(path.join(dirName, baseName + ".vtt")) ||
+                         fs.existsSync(path.join(dirName, baseName + ".VTT"));
+
     return {
       id,
       title,
@@ -534,11 +595,13 @@ async function scanAllLibraries() {
       thumbnail: `/api/thumbnail/${id}`,
       extension: ext,
       added: stat.birthtime.toISOString(),
+      hasSubtitles,
       ...parsedMeta,
     };
   });
 
   moviesCache = await Promise.all(moviePromises);
+  repopulateShowsFoldersIndex();
 
   // 2. Scan Music
   const musicExts = [".mp3", ".flac", ".m4a", ".wav", ".ogg", ".aac"];
@@ -952,6 +1015,114 @@ app.get("/api/stream/:id", (req, res) => {
 
   const mimeType = getMimeType(path.extname(filepath));
   streamMediaFile(filepath, mimeType, req, res);
+});
+
+// Helper to convert SubRip (SRT) to WebVTT format for browser native display
+function convertSrtToVtt(srtContent: string): string {
+  let normalized = srtContent.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const srtTimeRegex = /(\d\d:\d\d:\d\d),(\d\d\d)/g;
+  normalized = normalized.replace(srtTimeRegex, "$1.$2");
+  return "WEBVTT\n\n" + normalized;
+}
+
+// GET /api/subtitles/:id
+app.get("/api/subtitles/:id", (req, res) => {
+  const id = req.params.id;
+  const filepath = moviesIndex.get(id);
+
+  if (!filepath) {
+    return res.status(404).json({ error: "Movie ID not found or catalog unindexed" });
+  }
+
+  const dirName = path.dirname(filepath);
+  const ext = path.extname(filepath);
+  const baseName = path.basename(filepath, ext);
+
+  const srtPath = path.join(dirName, baseName + ".srt");
+  const srtPathUpper = path.join(dirName, baseName + ".SRT");
+  const vttPath = path.join(dirName, baseName + ".vtt");
+  const vttPathUpper = path.join(dirName, baseName + ".VTT");
+
+  let subtitlePath = "";
+  let isSrt = false;
+
+  if (fs.existsSync(vttPath)) {
+    subtitlePath = vttPath;
+  } else if (fs.existsSync(vttPathUpper)) {
+    subtitlePath = vttPathUpper;
+  } else if (fs.existsSync(srtPath)) {
+    subtitlePath = srtPath;
+    isSrt = true;
+  } else if (fs.existsSync(srtPathUpper)) {
+    subtitlePath = srtPathUpper;
+    isSrt = true;
+  }
+
+  if (!subtitlePath) {
+    return res.status(404).json({ error: "No subtitles found for this movie" });
+  }
+
+  try {
+    const content = fs.readFileSync(subtitlePath, "utf-8");
+    res.setHeader("Content-Type", "text/vtt; charset=utf-8");
+    if (isSrt) {
+      res.send(convertSrtToVtt(content));
+    } else {
+      res.send(content);
+    }
+  } catch (err: any) {
+    console.error("Error reading subtitle file:", err);
+    res.status(500).json({ error: "Failed to read subtitle file", details: err.message });
+  }
+});
+
+// GET /api/show-poster/:showName
+app.get("/api/show-poster/:showName", (req, res) => {
+  const showName = req.params.showName;
+  const firstEpisodeId = req.query.firstEpisodeId as string;
+
+  const showFolder = showsFoldersIndex.get(showName.toLowerCase());
+  if (showFolder && fs.existsSync(showFolder)) {
+    try {
+      const files = fs.readdirSync(showFolder);
+      const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+      const imageFile = files.find((f) => {
+        const ext = path.extname(f).toLowerCase();
+        return imageExtensions.includes(ext);
+      });
+
+      if (imageFile) {
+        const fullImagePath = path.join(showFolder, imageFile);
+        const ext = path.extname(imageFile).toLowerCase();
+        let mimeType = "image/jpeg";
+        if (ext === ".png") mimeType = "image/png";
+        if (ext === ".webp") mimeType = "image/webp";
+
+        res.setHeader("Content-Type", mimeType);
+        return fs.createReadStream(fullImagePath).pipe(res);
+      }
+    } catch (err) {
+      console.error(`Error reading show folder for poster of ${showName}:`, err);
+    }
+  }
+
+  // Fallback: stream firstEpisodeId's thumbnail
+  if (firstEpisodeId) {
+    const filepath = moviesIndex.get(firstEpisodeId);
+    if (filepath) {
+      const thumbPath = path.join(thumbsCacheDir, `${firstEpisodeId}.jpg`);
+      if (fs.existsSync(thumbPath)) {
+        res.setHeader("Content-Type", "image/jpeg");
+        return fs.createReadStream(thumbPath).pipe(res);
+      } else {
+        // Fallback or generate on-the-fly via redirect to the normal thumbnail endpoint
+        return res.redirect(`/api/thumbnail/${firstEpisodeId}`);
+      }
+    }
+  }
+
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
 });
 
 // 4. GET /api/thumbnail/:id

@@ -284,7 +284,7 @@ export default function Movies() {
                   >
                     <div className="relative aspect-[16/9] w-full overflow-hidden bg-black/40">
                       <img
-                        src={firstEpisode?.thumbnail || "/api/thumbnail"}
+                        src={`/api/show-poster/${encodeURIComponent(show.name)}?firstEpisodeId=${firstEpisode?.id || ""}`}
                         alt={show.name}
                         loading="lazy"
                         referrerPolicy="no-referrer"
@@ -369,7 +369,14 @@ export default function Movies() {
         >
           <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="relative aspect-[21/9] w-full bg-gradient-to-t from-cinema-bg via-black/20 to-black/60 flex flex-col justify-end p-6 md:p-8 shrink-0">
+            <div 
+              style={{
+                backgroundImage: `linear-gradient(to top, #09090b, rgba(9,9,11,0.2) 50%, rgba(9,9,11,0.7)), url('/api/show-poster/${encodeURIComponent(showDetails.name)}?firstEpisodeId=${showDetails.episodesBySeason.get(selectedSeason)?.[0]?.id || ""}')`,
+                backgroundSize: "cover",
+                backgroundPosition: "center"
+              }}
+              className="relative aspect-[21/9] w-full flex flex-col justify-end p-6 md:p-8 shrink-0 bg-zinc-900"
+            >
               {/* Close Button */}
               <button
                 onClick={() => setSelectedShow(null)}
