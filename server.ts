@@ -1345,8 +1345,9 @@ function getLiveProgramAt(channelId: string, timestamp: number) {
   
   const currentProgram = shuffled[activeIndex];
   const offsetSeconds = position - currentSum;
-  const startedAt = new Date(epoch + currentSum * 1000).toISOString();
-  const endsAt = new Date(epoch + (currentSum + (currentProgram.duration || 120)) * 1000).toISOString();
+  const loopNumber = Math.floor(elapsedSeconds / totalRuntime);
+  const startedAt = new Date(epoch + (loopNumber * totalRuntime + currentSum) * 1000).toISOString();
+  const endsAt = new Date(epoch + (loopNumber * totalRuntime + currentSum + (currentProgram.duration || 120)) * 1000).toISOString();
   const nextProgram = shuffled[(activeIndex + 1) % shuffled.length];
   
   return {
