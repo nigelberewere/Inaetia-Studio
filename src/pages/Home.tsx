@@ -7,8 +7,27 @@ import { Sparkles, Film, Disc, Clock } from "lucide-react";
 export default function Home() {
   const { movies, loading, error, continueWatching } = useApp();
 
-  // Pick a featured movie
-  const featuredMovie = movies.length > 0 ? movies[0] : null;
+  // Pick up to 6 featured movies dynamically using a scoring algorithm
+  const featuredMovies = React.useMemo(() => {
+    if (movies.length === 0) return [];
+    
+    // Prefer actual movies, fallback to anything if none
+    const candidates = movies.filter((m) => m.type === "movie");
+    const source = candidates.length > 0 ? candidates : movies;
+
+    // Score based on file size (larger file indicates higher quality / HD) + recency
+    const scored = [...source].map((m) => {
+      const sizeInGB = m.size / (1024 * 1024 * 1024);
+      const ageDays = (Date.now() - new Date(m.added).getTime()) / (1000 * 60 * 60 * 24);
+      const recencyBonus = Math.max(0, 30 - ageDays) * 0.5; // up to 15 points
+      const sizeScore = Math.min(25, sizeInGB * 3); // up to 25 points for HD
+      const score = sizeScore + recencyBonus;
+      return { movie: m, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 6).map((item) => item.movie);
+  }, [movies]);
 
   // Row 1: Recently Added (last 10 by file date)
   const recentlyAdded = [...movies]
@@ -61,7 +80,7 @@ export default function Home() {
   return (
     <div className="space-y-12 pb-24" id="home-view-page">
       {/* Cinematic Hero */}
-      <Hero movie={featuredMovie} />
+      <Hero movies={featuredMovies} />
 
       {/* 0. CONTINUE WATCHING ROW */}
       <section className="space-y-4" id="home-row-continue">

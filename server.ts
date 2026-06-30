@@ -1142,9 +1142,23 @@ app.get("/api/thumbnail/:id", (req, res) => {
     return fs.createReadStream(thumbPath).pipe(res);
   }
 
-  // Generate thumbnail at 1s mark, size 320x180
+  // Determine a smart seek offset to avoid introductory black frames
+  const movie = moviesCache.find((m) => m.id === id);
+  let seekSeconds = 120; // default 2 minutes
+  if (movie && movie.duration) {
+    if (movie.duration < 120) {
+      seekSeconds = Math.max(1, Math.round(movie.duration * 0.1));
+    } else {
+      seekSeconds = Math.min(300, Math.round(movie.duration * 0.1));
+    }
+  }
+
+  // Convert seekSeconds to a standard format (e.g. 120 or 120.00)
+  const seekStr = seekSeconds.toString();
+
+  // Generate thumbnail, size 320x180
   exec(
-    `ffmpeg -y -ss 00:00:01 -i "${filepath}" -vframes 1 -vf "scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2" "${thumbPath}"`,
+    `ffmpeg -y -ss ${seekStr} -i "${filepath}" -vframes 1 -vf "scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2" "${thumbPath}"`,
     (err) => {
       if (err) {
         console.error(`Thumbnail generation failed for ID ${id}:`, err.message);

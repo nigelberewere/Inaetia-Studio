@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Tv, Calendar, Play, ChevronUp, ChevronDown, Loader2, Clock, Volume2, VolumeX, AlertCircle } from "lucide-react";
 import { Channel, EPGItem } from "../types";
 
@@ -239,6 +239,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
   const [loading, setLoading] = useState<boolean>(true);
   const [muted, setMuted] = useState<boolean>(false);
   const [showBumper, setShowBumper] = useState<boolean>(false);
+  const [liveDrift, setLiveDrift] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const fetchLiveInfo = async () => {
@@ -249,6 +250,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
         const data = await res.json();
         setNowPlaying(data);
         setShowBumper(false);
+        setLiveDrift(0);
       }
     } catch (err) {
       console.error("Error fetching live channel data:", err);
@@ -286,6 +288,38 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
 
     return () => clearInterval(checkEndInterval);
   }, [nowPlaying, showBumper]);
+
+  // Dynamically measure and track playback drift from the schedule
+  useEffect(() => {
+    if (!nowPlaying || !videoRef.current) return;
+
+    const interval = setInterval(() => {
+      if (!videoRef.current || videoRef.current.paused) return;
+
+      const startedTime = new Date(nowPlaying.startedAt).getTime();
+      const idealOffset = (Date.now() - startedTime) / 1000;
+      const actualOffset = videoRef.current.currentTime;
+      const diff = idealOffset - actualOffset;
+      
+      // Set the live drift (floor to prevent minor flutter under 1s)
+      setLiveDrift(diff > 1 ? Math.floor(diff) : 0);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [nowPlaying]);
+
+  const syncToLive = () => {
+    if (videoRef.current && nowPlaying) {
+      const startedTime = new Date(nowPlaying.startedAt).getTime();
+      const idealOffset = (Date.now() - startedTime) / 1000;
+      const duration = videoRef.current.duration;
+      const target = duration ? Math.min(idealOffset, duration - 1) : idealOffset;
+
+      videoRef.current.currentTime = Math.max(0, target);
+      setLiveDrift(0);
+      console.log(`Manually synchronized playhead to live: offset is now ${target}s`);
+    }
+  };
 
   const handleVideoLoadedMetadata = () => {
     if (videoRef.current && nowPlaying) {
@@ -332,7 +366,10 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
     );
   }
 
-  const streamUrl = `/api/channels/${channel.id}/stream?t=${Date.now()}`;
+  const streamUrl = useMemo(() => {
+    if (!nowPlaying?.currentProgram?.id) return "";
+    return `/api/channels/${channel.id}/stream?t=${nowPlaying.currentProgram.id}`;
+  }, [channel.id, nowPlaying?.currentProgram?.id]);
 
   return (
     <div className="space-y-4">
@@ -385,12 +422,29 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
         )}
 
         {/* Custom Overlay Controls */}
-        <div className="absolute top-4 left-4 flex gap-2 z-10 pointer-events-none">
-          <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md shadow-lg tracking-widest">
+        <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10">
+          <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md shadow-lg tracking-widest pointer-events-none select-none">
             <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
             🔴 LIVE BROADCAST
           </span>
-          <span className="bg-black/60 text-gray-300 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-lg border border-white/5">
+
+          {liveDrift > 3 ? (
+            <button
+              onClick={syncToLive}
+              className="bg-cinema-amber hover:bg-cinema-amber/95 hover:scale-[1.02] text-cinema-bg font-black text-[10px] uppercase px-2.5 py-1 rounded-md shadow-lg flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer select-none"
+              title="Click to synchronize your playhead precisely with the real-time server broadcast schedule"
+            >
+              <Clock className="w-3 h-3" />
+              Behind by {liveDrift}s • Click to Sync
+            </button>
+          ) : (
+            <span className="bg-emerald-950/80 border border-emerald-500/35 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-lg flex items-center gap-1.5 pointer-events-none select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              IN SYNC WITH LIVE
+            </span>
+          )}
+
+          <span className="bg-black/60 text-gray-300 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-lg border border-white/5 pointer-events-none select-none">
             SEEK POSITION LOCKED
           </span>
         </div>
