@@ -1,8 +1,79 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { Component, useState, useEffect, useRef, useMemo } from "react";
 import { Tv, Calendar, Play, ChevronUp, ChevronDown, Loader2, Clock, Volume2, VolumeX, AlertCircle } from "lucide-react";
 import { Channel, EPGItem } from "../types";
 
+// Safe time formatting helper to prevent RangeError crashes in sandboxed browser environments
+function formatTimeSafe(dateInput: any): string {
+  if (!dateInput) return "";
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "";
+    // Pass undefined instead of [] for the locale to guarantee safe defaults in all browser engines
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    console.error("Error formatting time safely:", e);
+    return "";
+  }
+}
+
+// Robust error boundary to catch runtime rendering exceptions (e.g., date conversion errors or player crashes)
+class LiveTVErrorBoundary extends Component<any, any> {
+  state: any;
+  props: any;
+  setState: any;
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("LiveTV Error caught by Boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-red-950/40 border border-red-800/40 rounded-2xl p-6 text-center max-w-xl mx-auto my-10 space-y-4">
+          <div className="h-12 w-12 rounded-full bg-red-900/30 text-red-500 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Broadcast Player Exception</h2>
+          <p className="text-sm text-gray-400">
+            An unexpected rendering exception occurred. This is often due to invalid system time or a stream configuration issue.
+          </p>
+          <div className="bg-black/40 p-3 rounded-lg text-xs font-mono text-left text-red-300 overflow-x-auto max-h-40">
+            {this.state.error?.message || "Unknown rendering error"}
+          </div>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-cinema-amber text-cinema-bg hover:bg-cinema-amber/95 font-semibold text-sm rounded-lg transition-colors cursor-pointer"
+          >
+            Reset Signal
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function LiveTV() {
+  return (
+    <LiveTVErrorBoundary>
+      <LiveTVContent />
+    </LiveTVErrorBoundary>
+  );
+}
+
+function LiveTVContent() {
   const [activeTab, setActiveTab] = useState<"channels" | "guide">("channels");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -140,15 +211,17 @@ function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
         let timeRemainingStr = "";
 
         if (prog) {
-          const start = new Date(prog.startedAt).getTime();
-          const end = new Date(prog.endsAt).getTime();
-          const total = end - start;
-          const elapsed = Date.now() - start;
-          progressPercent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+          const start = prog.startedAt ? new Date(prog.startedAt).getTime() : 0;
+          const end = prog.endsAt ? new Date(prog.endsAt).getTime() : 0;
+          if (start > 0 && end > start) {
+            const total = end - start;
+            const elapsed = Date.now() - start;
+            progressPercent = Math.min(100, Math.max(0, (elapsed / total) * 100));
 
-          const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
-          const mins = Math.floor(remainingSeconds / 60);
-          timeRemainingStr = mins > 0 ? `${mins}m left` : "Ending now";
+            const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
+            const mins = Math.floor(remainingSeconds / 60);
+            timeRemainingStr = mins > 0 ? `${mins}m left` : "Ending now";
+          }
         }
 
         return (
@@ -194,8 +267,7 @@ function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
                   <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
                     <Clock className="h-3.5 w-3.5" />
                     <span>
-                      {new Date(prog.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} -{" "}
-                      {new Date(prog.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTimeSafe(prog.startedAt)} - {formatTimeSafe(prog.endsAt)}
                     </span>
                   </div>
                 )}
@@ -237,22 +309,36 @@ interface LivePlayerProps {
 function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePlayerProps) {
   const [nowPlaying, setNowPlaying] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState<boolean>(false);
   const [showBumper, setShowBumper] = useState<boolean>(false);
   const [liveDrift, setLiveDrift] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
 
   const fetchLiveInfo = async () => {
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current < 4000) {
+      console.log("Coordinating fast fetch requests. Skipping to prevent loop.");
+      return;
+    }
+    lastFetchTimeRef.current = now;
+
     try {
+      setError(null);
       const res = await fetch(`/api/channels/${channel.id}/now`);
       if (res.ok) {
         const data = await res.json();
         setNowPlaying(data);
         setShowBumper(false);
         setLiveDrift(0);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to retrieve channel broadcast schedule.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching live channel data:", err);
+      setError("Network or server connection failed.");
     } finally {
       setLoading(false);
     }
@@ -260,9 +346,12 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
 
   useEffect(() => {
     setNowPlaying(null);
+    setError(null);
     setShowBumper(false);
     setLiveDrift(0);
     setLoading(true);
+    // Reset rate limiter so tuning channel is always immediate
+    lastFetchTimeRef.current = 0;
     fetchLiveInfo();
   }, [channel.id]);
 
@@ -359,6 +448,39 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
     }
     onChannelChange(channelsList[nextIndex]);
   };
+
+  if (error) {
+    return (
+      <div className="aspect-video w-full flex flex-col items-center justify-center bg-zinc-950/80 rounded-xl border border-red-950/30 p-6 space-y-3">
+        <AlertCircle className="h-10 w-10 text-red-500 animate-pulse" />
+        <h3 className="text-white font-bold text-sm">Signal Weak or Lost</h3>
+        <p className="text-xs text-gray-400 max-w-md text-center leading-relaxed">
+          {error}
+          <br />
+          <span className="text-[10px] text-gray-500 mt-1 block">
+            To restore the broadcast, make sure your Video Library subfolders (e.g., "Movies" or "Cartoons") contain compatible media files.
+          </span>
+        </p>
+        <div className="flex gap-3 mt-2">
+          <button
+            onClick={() => {
+              setLoading(true);
+              fetchLiveInfo();
+            }}
+            className="px-3.5 py-1.5 bg-white/10 hover:bg-white/15 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Retry Tuning
+          </button>
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 border border-cinema-border hover:bg-white/5 text-gray-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Exit Player
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !nowPlaying) {
     return (
@@ -463,7 +585,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
             </div>
             <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              Starts at {new Date(nowPlaying.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Starts at {formatTimeSafe(nowPlaying.endsAt)}
             </div>
           </div>
         )}
@@ -583,7 +705,7 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
                   className="border-r border-cinema-border/30 text-xs text-gray-300 font-semibold py-3 px-2 text-center select-none"
                   style={{ width: `${30 * MINUTE_WIDTH}px` }}
                 >
-                  {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {formatTimeSafe(time)}
                 </div>
               ))}
             </div>
@@ -653,7 +775,7 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
                                 </span>
                               )}
                               <span>
-                                {new Date(item.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                {formatTimeSafe(item.startTime)}
                               </span>
                               <span>•</span>
                               <span>{Math.round(durMins)} mins</span>
