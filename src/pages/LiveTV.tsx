@@ -284,7 +284,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
         console.log("Program duration elapsed, advancing to next live scheduled program...");
         fetchLiveInfo();
       }
-    }, 1000);
+    }, 4000);
 
     return () => clearInterval(checkEndInterval);
   }, [nowPlaying, showBumper]);
@@ -303,7 +303,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
       
       // Set the live drift (floor to prevent minor flutter under 1s)
       setLiveDrift(diff > 1 ? Math.floor(diff) : 0);
-    }, 1000);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, [nowPlaying]);

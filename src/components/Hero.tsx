@@ -105,13 +105,13 @@ export default function Hero({ movies = [], movie }: HeroProps) {
           {/* Background Cinematic Artwork Thumbnail (Blurred) & Dominant Gradient Overlays */}
           <div className="absolute inset-0 z-0 overflow-hidden">
             <motion.img
-              initial={{ scale: 1.04 }}
-              animate={{ scale: 1.09 }}
-              transition={{ duration: 7, ease: "linear" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.3 }}
+              transition={{ duration: 0.5 }}
               src={activeMovie.thumbnail}
               alt=""
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover opacity-30 filter blur-sm"
+              className="w-full h-full object-cover filter blur-sm"
             />
             {/* Master Dark/Color Gradient overlays for cinema mood */}
             <div className="absolute inset-0 bg-gradient-to-t from-cinema-bg via-cinema-bg/85 to-transparent" />
