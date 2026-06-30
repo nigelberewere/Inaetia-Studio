@@ -46,14 +46,37 @@ fi
 
 # Build Project with Native-Binary and Cross-Platform Safety
 echo "🏗️ Installing dependencies and building production bundle..."
-# If node_modules was copied from Windows PC, Native Node Addons (like tailwindcss oxide binary) will be broken.
-# We proactively detect this and run a clean installation.
+# To save mobile data, we avoid deleting node_modules unconditionally.
+# We reuse the existing folder and only repair or clean install if absolutely necessary.
 if [ -d "node_modules" ]; then
-  echo "🧹 Cleaning previous node_modules folder to prevent platform-specific native binary conflicts..."
-  rm -rf node_modules package-lock.json
+  echo "✔ Existing node_modules found. Checking if current installation is functional to save mobile data..."
+  if npm run build &>/dev/null; then
+    echo "🚀 Build succeeded using existing node_modules! Skipping installation to save your data."
+  else
+    echo "⚠️ Build failed or native binaries are incompatible. Attempting a lightweight repair..."
+    # Attempt offline-preferred install to repair native addons/missing packages without downloading everything
+    if npm install --prefer-offline --no-audit --no-fund; then
+      echo "🔄 Repair successful! Retrying build..."
+      if npm run build; then
+        echo "🚀 Build succeeded after lightweight repair!"
+      else
+        echo "🧹 Build still failing. Cleaning node_modules and performing a fresh installation..."
+        rm -rf node_modules package-lock.json
+        npm install
+        npm run build
+      fi
+    else
+      echo "🧹 Repair failed. Cleaning node_modules and performing a fresh installation..."
+      rm -rf node_modules package-lock.json
+      npm install
+      npm run build
+    fi
+  fi
+else
+  echo "📦 No node_modules found. Performing fresh dependency installation..."
+  npm install
+  npm run build
 fi
-npm install
-npm run build
 
 # Ensure folders exist
 echo "📂 Creating storage and thumbnail directories..."
