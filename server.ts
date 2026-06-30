@@ -86,6 +86,7 @@ let moviesCache: any[] = [];
 let musicCache: any[] = [];
 let photosCache: any[] = [];
 let cachesLastUpdated = 0;
+let hasPerformedInitialScan = false;
 const CACHE_LIFETIME = 5 * 60 * 1000; // 5 minutes
 
 // In-memory indexing maps for stream lookup by MD5 ID
@@ -106,6 +107,7 @@ function loadPersistentCache() {
         musicCache = parsed.musicCache || [];
         photosCache = parsed.photosCache || [];
         cachesLastUpdated = parsed.cachesLastUpdated || Date.now();
+        hasPerformedInitialScan = true;
         
         // Re-populate indices
         if (parsed.moviesIndexList) {
@@ -486,6 +488,7 @@ async function scanAllLibraries() {
 
   photosCache = await Promise.all(photoPromises);
   cachesLastUpdated = Date.now();
+  hasPerformedInitialScan = true;
 
   savePersistentCache();
 
@@ -537,7 +540,7 @@ setInterval(() => {
 
 // Check if caches need manual or automatic reload (remains lightweight and non-blocking)
 async function checkCache() {
-  if (moviesCache.length > 0 || musicCache.length > 0 || photosCache.length > 0) {
+  if (hasPerformedInitialScan) {
     // If the cache is stale, trigger a scan in the background asynchronously, but do NOT block current requests!
     if (Date.now() - cachesLastUpdated > CACHE_LIFETIME) {
       console.log("⏱️ Cache is stale, triggering background rescan without blocking user response.");
