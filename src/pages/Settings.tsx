@@ -2,12 +2,15 @@ import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
-  Film, Music, Cpu, ShieldAlert, Wifi 
+  Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image
 } from "lucide-react";
 
 export default function Settings() {
   const { status, fetchStatus, triggerRescan, loading, movies } = useApp();
   const [rescanning, setRescanning] = useState(false);
+  const [clearingThumbs, setClearingThumbs] = useState(false);
+  const [confirmClearThumbs, setConfirmClearThumbs] = useState(false);
+  const [thumbsClearedMessage, setThumbsClearedMessage] = useState("");
 
   useEffect(() => {
     fetchStatus();
@@ -50,6 +53,33 @@ export default function Settings() {
       console.error(err);
     } finally {
       setRescanning(false);
+    }
+  };
+
+  const handleClearThumbnails = async () => {
+    if (!confirmClearThumbs) {
+      setConfirmClearThumbs(true);
+      // Reset confirmation if not clicked again within 5 seconds
+      setTimeout(() => setConfirmClearThumbs(false), 5000);
+      return;
+    }
+
+    setClearingThumbs(true);
+    setConfirmClearThumbs(false);
+    setThumbsClearedMessage("");
+    try {
+      const res = await fetch("/api/thumbnails/clear", { method: "POST" });
+      if (res.ok) {
+        setThumbsClearedMessage("Cleared! New smart thumbnails will generate as you browse.");
+        setTimeout(() => setThumbsClearedMessage(""), 5000);
+      } else {
+        throw new Error("Failed to clear thumbnail cache");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error clearing thumbnail cache: " + err.message);
+    } finally {
+      setClearingThumbs(false);
     }
   };
 
@@ -147,6 +177,40 @@ export default function Settings() {
             <RefreshCw className={`w-4 h-4 ${rescanning ? "animate-spin" : ""}`} />
             {rescanning ? "Scanning Filesystem..." : "Rescan Media Library"}
           </button>
+
+          <button
+            id="btn-settings-clear-thumbs"
+            onClick={handleClearThumbnails}
+            disabled={clearingThumbs || loading}
+            className={`w-full mt-2.5 flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-bold text-xs transition-all border ${
+              confirmClearThumbs 
+                ? "bg-red-600/20 text-red-400 border-red-500 hover:bg-red-600/35"
+                : "bg-white/[0.03] text-cinema-muted border-cinema-border hover:bg-white/[0.08] hover:text-white"
+            } active:scale-95 disabled:opacity-50 disabled:active:scale-100 cursor-pointer`}
+          >
+            {clearingThumbs ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Purging Thumbnail Cache...</span>
+              </>
+            ) : confirmClearThumbs ? (
+              <>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirm: Purge Old Thumbnails?</span>
+              </>
+            ) : (
+              <>
+                <Image className="w-3.5 h-3.5" />
+                <span>Purge & Regenerate Thumbnails</span>
+              </>
+            )}
+          </button>
+
+          {thumbsClearedMessage && (
+            <div className="text-[11px] text-cinema-amber mt-2 text-center animate-pulse bg-cinema-amber/5 py-1 px-2 rounded-lg border border-cinema-amber/10">
+              {thumbsClearedMessage}
+            </div>
+          )}
         </div>
       </div>
 

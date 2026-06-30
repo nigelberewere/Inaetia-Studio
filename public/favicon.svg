@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Definitions for Gradients and Filters -->
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e1e24" />
+      <stop offset="100%" stop-color="#0a0a0c" />
+    </radialGradient>
+    
+    <!-- Neon Banana Gradient -->
+    <linearGradient id="bananaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffb00" />
+      <stop offset="60%" stop-color="#ffd000" />
+      <stop offset="100%" stop-color="#ff9d00" />
+    </linearGradient>
+
+    <!-- Play Button Gradient -->
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#ffd000" />
+    </linearGradient>
+
+    <!-- Soft Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)" stroke="#27272a" stroke-width="6" />
+
+  <!-- Outer Neon Ring Accent -->
+  <circle cx="256" cy="256" r="215" fill="none" stroke="#ffd000" stroke-width="2" stroke-opacity="0.3" stroke-dasharray="12 8" />
+
+  <!-- Nano Banana Body: Beautifully stylized curved arc representing a sleek high-tech banana -->
+  <g filter="url(#glow)">
+    <!-- Main Banana Curve -->
+    <path d="M 370 120 
+             C 330 200, 310 290, 190 350 
+             C 130 380, 100 370, 80 340 
+             C 95 385, 150 410, 210 395 
+             C 310 370, 385 270, 400 170 
+             C 405 135, 395 110, 370 120 Z" 
+          fill="url(#bananaGrad)" />
+          
+    <!-- Banana Stem Base Accent -->
+    <path d="M 370 120 C 375 115, 385 105, 395 108 C 392 118, 382 125, 370 120 Z" fill="#422006" />
+    <path d="M 80 340 C 75 342, 65 348, 62 342 C 65 335, 75 335, 80 340 Z" fill="#422006" />
+  </g>
+
+  <!-- Futuristic Play Button inside the banana curves -->
+  <g filter="url(#glow)">
+    <!-- Triangular Play Icon -->
+    <path d="M 225 180 
+             C 225 174, 232 170, 237 173 
+             L 335 243 
+             C 340 246, 340 254, 335 257 
+             L 237 327 
+             C 232 330, 225 326, 225 320 
+             Z" 
+          fill="url(#playGrad)" />
+  </g>
+
+  <!-- Tech Dots grid or overlay lines -->
+  <circle cx="160" cy="200" r="3" fill="#ffd000" opacity="0.5" />
+  <circle cx="180" cy="180" r="4" fill="#ffd000" opacity="0.6" />
+  <circle cx="200" cy="160" r="3" fill="#ffd000" opacity="0.4" />
+</svg>

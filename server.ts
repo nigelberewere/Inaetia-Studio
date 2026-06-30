@@ -1568,6 +1568,25 @@ app.post("/api/rescan", async (req, res) => {
   }
 });
 
+// Clear thumbnail cache to force smart regeneration
+app.post("/api/thumbnails/clear", async (req, res) => {
+  try {
+    if (fs.existsSync(thumbsCacheDir)) {
+      const files = fs.readdirSync(thumbsCacheDir);
+      for (const file of files) {
+        const fullPath = path.join(thumbsCacheDir, file);
+        if (fs.statSync(fullPath).isFile()) {
+          fs.unlinkSync(fullPath);
+        }
+      }
+      console.log("🧹 Thumbnail cache cleared successfully by user request.");
+    }
+    res.json({ success: true, message: "Thumbnail cache cleared successfully" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to clear thumbnail cache", details: err.message });
+  }
+});
+
 // ==========================================
 // VITE AND STATIC ASSET MIDDLEWARE
 // ==========================================
