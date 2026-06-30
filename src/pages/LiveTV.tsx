@@ -243,7 +243,6 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const fetchLiveInfo = async () => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/channels/${channel.id}/now`);
       if (res.ok) {
@@ -260,6 +259,10 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
   };
 
   useEffect(() => {
+    setNowPlaying(null);
+    setShowBumper(false);
+    setLiveDrift(0);
+    setLoading(true);
     fetchLiveInfo();
   }, [channel.id]);
 
@@ -460,7 +463,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
             </div>
             <div className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              Starts at {new Date(nowPlaying.nextProgram.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Starts at {new Date(nowPlaying.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
         )}
