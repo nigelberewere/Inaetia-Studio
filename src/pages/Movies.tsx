@@ -1,49 +1,193 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import MovieCard from "../components/MovieCard";
-import { ListFilter, ArrowUpDown, Film, RefreshCw } from "lucide-react";
+import { 
+  Film, Tv, Sparkles, Folder, Play, Clock, HardDrive, 
+  ChevronRight, RefreshCw, X, Clapperboard, Video
+} from "lucide-react";
+import { Movie } from "../types";
 
-type SortType = "title-asc" | "added-desc" | "size-desc" | "duration-desc";
+type CategoryType = "all" | "movies" | "tvshows" | "marvel" | "cartoons" | "videos";
 
 export default function Movies() {
-  const { movies, loading, refreshLibrary } = useApp();
+  const { movies, loading, refreshLibrary, setCurrentVideo, continueWatching } = useApp();
 
-  const [sortBy, setSortBy] = useState<SortType>("added-desc");
-  const [filterExt, setFilterExt] = useState<string>("all");
+  const [activeCategory, setActiveCategory] = useState<CategoryType>("all");
+  const [selectedShow, setSelectedShow] = useState<string | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<string>("Season 1");
 
-  // Collect unique movie extensions from loaded movies list dynamically
-  const uniqueExtensions = useMemo(() => {
-    const exts = movies.map((m) => m.extension.toLowerCase());
-    return ["all", ...Array.from(new Set(exts))];
-  }, [movies]);
-
-  // Process sorting & filtering
-  const processedMovies = useMemo(() => {
-    let result = [...movies];
-
-    // Filter by extension
-    if (filterExt !== "all") {
-      result = result.filter((m) => m.extension.toLowerCase() === filterExt);
+  // Helper to compute episode progress
+  const getEpisodeProgress = (episodeId: string) => {
+    const watchRecord = continueWatching.find((item) => item.movieId === episodeId);
+    if (watchRecord) {
+      return (watchRecord.position / watchRecord.duration) * 100;
     }
+    return undefined;
+  };
 
-    // Sort files
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case "title-asc":
-          return a.title.localeCompare(b.title);
-        case "added-desc":
-          return new Date(b.added).getTime() - new Date(a.added).getTime();
-        case "size-desc":
-          return b.size - a.size;
-        case "duration-desc":
-          return b.duration - a.duration;
-        default:
-          return 0;
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  // Group all episodes into unique TV Shows
+  const shows = useMemo(() => {
+    const showMap = new Map<string, { name: string; episodes: Movie[]; category: string }>();
+    
+    movies.forEach((m) => {
+      if (m.type === "episode" && m.showName) {
+        if (!showMap.has(m.showName)) {
+          showMap.set(m.showName, {
+            name: m.showName,
+            episodes: [],
+            category: m.category || "Tv Shows"
+          });
+        }
+        showMap.get(m.showName)!.episodes.push(m);
       }
     });
 
+    return Array.from(showMap.values());
+  }, [movies]);
+
+  // Selected Show details helper
+  const showDetails = useMemo(() => {
+    if (!selectedShow) return null;
+    const show = shows.find((s) => s.name === selectedShow);
+    if (!show) return null;
+
+    // Group episodes of this show by season
+    const seasonMap = new Map<string, Movie[]>();
+    show.episodes.forEach((ep) => {
+      const sName = ep.seasonName || "Season 1";
+      if (!seasonMap.has(sName)) {
+        seasonMap.set(sName, []);
+      }
+      seasonMap.get(sName)!.push(ep);
+    });
+
+    // Sort seasons numerically
+    const parseSeasonNum = (name: string) => {
+      const match = name.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    };
+
+    const sortedSeasons = Array.from(seasonMap.keys()).sort(
+      (a, b) => parseSeasonNum(a) - parseSeasonNum(b)
+    );
+
+    // Sort episodes within seasons by filename/episode title
+    const parseEpisodeNum = (title: string = "", filename: string = "") => {
+      const match = (title + " " + filename).match(/(?:e|ep|episode|ep\.)\s*(\d+)/i) || (title + " " + filename).match(/\b(\d+)\b/);
+      return match ? parseInt(match[1], 10) : null;
+    };
+
+    seasonMap.forEach((eps) => {
+      eps.sort((a, b) => {
+        const epA = parseEpisodeNum(a.episodeTitle, a.filename);
+        const epB = parseEpisodeNum(b.episodeTitle, b.filename);
+        if (epA !== null && epB !== null && epA !== epB) {
+          return epA - epB;
+        }
+        return a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: "base" });
+      });
+    });
+
+    return {
+      name: show.name,
+      category: show.category,
+      seasons: sortedSeasons,
+      episodesBySeason: seasonMap,
+      totalEpisodes: show.episodes.length
+    };
+  }, [selectedShow, shows]);
+
+  // Filter content based on active category
+  const filteredContent = useMemo(() => {
+    const result = {
+      moviesList: [] as Movie[],
+      showsList: [] as typeof shows,
+      videosBySubcategory: {} as Record<string, Movie[]>,
+      standaloneVideos: [] as Movie[]
+    };
+
+    if (activeCategory === "all") {
+      // Direct movies
+      result.moviesList = movies.filter((m) => m.type === "movie");
+      // All aggregated TV shows
+      result.showsList = shows;
+      // Videos category items
+      movies.forEach((m) => {
+        if (m.category === "Videos" || m.type === "video") {
+          const sub = m.subcategory || "Other Videos";
+          if (!result.videosBySubcategory[sub]) {
+            result.videosBySubcategory[sub] = [];
+          }
+          result.videosBySubcategory[sub].push(m);
+        }
+      });
+    } else if (activeCategory === "movies") {
+      // Just normal movies (from any root but parsed as movies)
+      result.moviesList = movies.filter((m) => m.type === "movie");
+    } else if (activeCategory === "tvshows") {
+      // Only TV Shows from the Tv Shows root
+      result.showsList = shows.filter((s) => s.category === "Tv Shows");
+    } else if (activeCategory === "marvel") {
+      // Marvel Movies (individual movies)
+      result.moviesList = movies.filter((m) => m.category === "Marvel Movies" && m.type === "movie");
+      // Marvel Shows (grouped series)
+      result.showsList = shows.filter((s) => s.category === "Marvel Movies");
+    } else if (activeCategory === "cartoons") {
+      // Cartoon Shows (grouped series)
+      result.showsList = shows.filter((s) => s.category === "Cartoons");
+      // Cartoon Movies/Videos (independent cartoon files)
+      result.moviesList = movies.filter((m) => m.category === "Cartoons" && m.type !== "episode");
+    } else if (activeCategory === "videos") {
+      // Group by subcategory: Music Videos, dramas, etc.
+      movies.forEach((m) => {
+        if (m.category === "Videos" || m.type === "video") {
+          const sub = m.subcategory || "Other Videos";
+          if (!result.videosBySubcategory[sub]) {
+            result.videosBySubcategory[sub] = [];
+          }
+          result.videosBySubcategory[sub].push(m);
+        }
+      });
+    }
+
     return result;
-  }, [movies, sortBy, filterExt]);
+  }, [activeCategory, movies, shows]);
+
+  const handleOpenShow = (showName: string) => {
+    setSelectedShow(showName);
+    const show = shows.find((s) => s.name === showName);
+    if (show && show.episodes.length > 0) {
+      // Default to the first season available
+      const seasonMap = new Map<string, Movie[]>();
+      show.episodes.forEach((ep) => {
+        const sName = ep.seasonName || "Season 1";
+        if (!seasonMap.has(sName)) seasonMap.set(sName, []);
+        seasonMap.get(sName)!.push(ep);
+      });
+      const keys = Array.from(seasonMap.keys());
+      if (keys.length > 0) {
+        setSelectedSeason(keys[0]);
+      } else {
+        setSelectedSeason("Season 1");
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -59,84 +203,288 @@ export default function Movies() {
   }
 
   return (
-    <div className="space-y-8 pb-24 animate-fade-in" id="movies-view-page">
-      {/* Top action/filters header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cinema-border pb-5">
+    <div className="space-y-8 pb-24 animate-fade-in text-white" id="movies-view-page">
+      {/* Category Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cinema-border pb-5">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+          <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
             <Film className="w-7 h-7 text-cinema-amber" />
-            Movies Directory
+            Media Explorer
           </h1>
           <p className="text-cinema-muted text-xs md:text-sm mt-1">
-            Browse and stream {movies.length} indexable movies cached locally.
+            Organized directories and high-definition local streams.
           </p>
         </div>
 
-        {/* Filters Controls Box */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Dynamic Extensions Filter */}
-          <div className="flex items-center gap-1.5 bg-cinema-card px-3 py-1.5 rounded-xl border border-cinema-border">
-            <ListFilter className="w-4 h-4 text-cinema-muted" />
-            <select
-              value={filterExt}
-              onChange={(e) => setFilterExt(e.target.value)}
-              className="bg-transparent text-xs text-white focus:outline-none cursor-pointer pr-2 font-medium"
-              id="filter-extensions-select"
-            >
-              {uniqueExtensions.map((ext) => (
-                <option key={ext} value={ext} className="bg-cinema-bg text-white">
-                  {ext === "all" ? "All Formats" : ext.toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sorter Selector */}
-          <div className="flex items-center gap-1.5 bg-cinema-card px-3 py-1.5 rounded-xl border border-cinema-border">
-            <ArrowUpDown className="w-4 h-4 text-cinema-muted" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortType)}
-              className="bg-transparent text-xs text-white focus:outline-none cursor-pointer pr-2 font-medium"
-              id="sort-movies-select"
-            >
-              <option value="added-desc" className="bg-cinema-bg">Recently Added</option>
-              <option value="title-asc" className="bg-cinema-bg">Name A-Z</option>
-              <option value="size-desc" className="bg-cinema-bg">File Size</option>
-              <option value="duration-desc" className="bg-cinema-bg">Duration</option>
-            </select>
-          </div>
-
-          {/* Manual reload trigger */}
-          <button
-            onClick={refreshLibrary}
-            className="p-2 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-colors"
-            title="Reload library list"
-            id="btn-movies-reload"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+        {/* Manual Rescan Trigger */}
+        <button
+          onClick={refreshLibrary}
+          className="self-start md:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-all text-xs font-semibold"
+          title="Reload Library Filesystem"
+          id="btn-movies-reload"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh Library
+        </button>
       </div>
 
-      {/* Grid Display */}
-      {processedMovies.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center bg-cinema-card border border-cinema-border rounded-2xl p-8 max-w-lg mx-auto">
-          <span className="text-4xl">🎬</span>
-          <h3 className="text-xl font-bold mt-4">No movies matched filters</h3>
-          <p className="text-cinema-muted text-sm mt-2">
-            Try choosing a different file format from the filter or place valid movie formats (.mp4, .mkv, .avi) inside your video directory.
-          </p>
-        </div>
-      ) : (
+      {/* Directory Category Filters Navigation */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none" id="directory-tabs-list">
+        {(
+          [
+            { id: "all", label: "All Media", icon: Folder },
+            { id: "movies", label: "Movies", icon: Clapperboard },
+            { id: "tvshows", label: "TV Shows", icon: Tv },
+            { id: "marvel", label: "Marvel Universe", icon: Sparkles },
+            { id: "cartoons", label: "Cartoons", icon: Video },
+            { id: "videos", label: "Videos & Clips", icon: Film }
+          ] as const
+        ).map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeCategory === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveCategory(tab.id);
+                setSelectedShow(null); // Close active show panel
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-xs shrink-0 active:scale-95 transition-all cursor-pointer ${
+                isActive
+                  ? "bg-cinema-amber text-cinema-bg border-cinema-amber shadow-lg shadow-cinema-amber/10"
+                  : "bg-cinema-card border-cinema-border text-cinema-muted hover:text-white hover:bg-white/5"
+              }`}
+              id={`tab-category-${tab.id}`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content Rendering Grid */}
+      <div className="space-y-12">
+        {/* Render Aggregated TV Shows (Series) */}
+        {filteredContent.showsList.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2 border-l-4 border-cinema-amber pl-3">
+              <Tv className="w-5 h-5 text-cinema-amber" />
+              TV Series ({filteredContent.showsList.length})
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+              {filteredContent.showsList.map((show) => {
+                const firstEpisode = show.episodes[0];
+                return (
+                  <div
+                    key={show.name}
+                    onClick={() => handleOpenShow(show.name)}
+                    className="group relative bg-cinema-card rounded-xl overflow-hidden border border-cinema-border cursor-pointer flex flex-col movie-card-hover"
+                    id={`series-card-${show.name.replace(/\s+/g, "-")}`}
+                  >
+                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-black/40">
+                      <img
+                        src={firstEpisode?.thumbnail || "/api/thumbnail"}
+                        alt={show.name}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <span className="absolute top-2 right-2 px-2 py-0.5 bg-cinema-amber text-cinema-bg rounded text-[10px] font-black uppercase tracking-wider">
+                        Series
+                      </span>
+                    </div>
+                    <div className="p-3 md:p-4 flex flex-col flex-1 justify-between gap-2">
+                      <h3 className="font-bold text-sm md:text-base text-white truncate group-hover:text-cinema-amber transition-colors">
+                        {show.name}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-cinema-muted font-medium mt-auto">
+                        <span>{show.episodes.length} Episodes</span>
+                        <span className="flex items-center text-cinema-amber gap-0.5 text-[10px] uppercase font-bold tracking-wider">
+                          Browse <ChevronRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Render Direct Movies */}
+        {filteredContent.moviesList.length > 0 && (
+          <section className="space-y-4">
+            <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2 border-l-4 border-cinema-amber pl-3">
+              <Clapperboard className="w-5 h-5 text-cinema-amber" />
+              Movies ({filteredContent.moviesList.length})
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+              {filteredContent.moviesList.map((movie) => {
+                const CardItem = MovieCard as any;
+                return <CardItem key={movie.id} movie={movie} />;
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Render Custom Videos Subcategories (Clips, Music Videos, Local dramas etc.) */}
+        {Object.entries(filteredContent.videosBySubcategory).map(([sub, list]) => {
+          const videoList = list as Movie[];
+          return (
+            <section key={sub} className="space-y-4">
+              <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2 border-l-4 border-cinema-amber pl-3 capitalize">
+                <Film className="w-5 h-5 text-cinema-amber" />
+                {sub} ({videoList.length})
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                {videoList.map((video) => {
+                  const CardItem = MovieCard as any;
+                  return <CardItem key={video.id} movie={video} />;
+                })}
+              </div>
+            </section>
+          );
+        })}
+
+        {/* Zero Results Placeholder */}
+        {filteredContent.moviesList.length === 0 &&
+          filteredContent.showsList.length === 0 &&
+          Object.keys(filteredContent.videosBySubcategory).length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 text-center bg-cinema-card border border-cinema-border rounded-2xl p-8 max-w-lg mx-auto">
+              <span className="text-5xl">📼</span>
+              <h3 className="text-xl font-bold mt-4">Directory looks empty</h3>
+              <p className="text-cinema-muted text-sm mt-2">
+                Make sure you place your video formats (.mp4, .mkv) in their respective folders under the hard drive mounting path `/mnt/storage/Videos`.
+              </p>
+            </div>
+          )}
+      </div>
+
+      {/* Netflix-style TV Show Details Immersive Overlay Panel */}
+      {selectedShow && showDetails && (
         <div 
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6" 
-          id="movies-grid"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 md:p-6 animate-fade-in"
+          id="tv-show-details-modal"
         >
-          {processedMovies.map((movie) => {
-            const CardItem: any = MovieCard;
-            return <CardItem key={movie.id} movie={movie} />;
-          })}
+          <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="relative aspect-[21/9] w-full bg-gradient-to-t from-cinema-bg via-black/20 to-black/60 flex flex-col justify-end p-6 md:p-8">
+              {/* Close Button */}
+              <button
+                onClick={() => setSelectedShow(null)}
+                className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-black/90 hover:text-cinema-amber text-white transition-all cursor-pointer"
+                title="Close Panel"
+                id="btn-close-show-details"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-cinema-amber uppercase tracking-wider bg-cinema-amber/10 px-2.5 py-1 rounded-md border border-cinema-amber/20">
+                  TV Series
+                </span>
+                <h2 className="text-2xl md:text-4xl font-black text-white drop-shadow-md mt-2">
+                  {showDetails.name}
+                </h2>
+                <p className="text-xs md:text-sm text-cinema-muted">
+                  {showDetails.totalEpisodes} episodes available • Sorted sequentially
+                </p>
+              </div>
+            </div>
+
+            {/* Seasons Tab Selector Row */}
+            {showDetails.seasons.length > 1 && (
+              <div className="px-6 border-b border-cinema-border py-3 flex gap-2 overflow-x-auto">
+                {showDetails.seasons.map((season) => (
+                  <button
+                    key={season}
+                    onClick={() => setSelectedSeason(season)}
+                    className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer shrink-0 ${
+                      selectedSeason === season
+                        ? "bg-cinema-amber text-cinema-bg"
+                        : "bg-cinema-card border border-cinema-border text-cinema-muted hover:text-white"
+                    }`}
+                  >
+                    {season}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Episodes List Container */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <h3 className="text-sm font-bold text-cinema-amber uppercase tracking-wider">
+                {selectedSeason} Episodes
+              </h3>
+              
+              <div className="grid gap-3" id="tv-episodes-list">
+                {(showDetails.episodesBySeason.get(selectedSeason) || []).map((episode, index) => {
+                  const progress = getEpisodeProgress(episode.id);
+                  return (
+                    <div
+                      key={episode.id}
+                      onClick={() => {
+                        setCurrentVideo(episode);
+                      }}
+                      className="group flex flex-col sm:flex-row items-stretch bg-cinema-card border border-cinema-border rounded-xl overflow-hidden hover:border-cinema-amber/50 transition-colors cursor-pointer p-2.5 gap-4"
+                      id={`episode-row-${episode.id}`}
+                    >
+                      {/* Image Preview Thumbnail */}
+                      <div className="relative aspect-[16/10] w-full sm:w-44 shrink-0 bg-black/40 rounded-lg overflow-hidden">
+                        <img
+                          src={episode.thumbnail}
+                          alt={episode.episodeTitle}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Play className="w-8 h-8 text-cinema-amber fill-current" />
+                        </div>
+                        {/* Format tag */}
+                        <span className="absolute top-1.5 right-1.5 bg-black/70 text-[9px] font-bold px-1 py-0.2 rounded text-white uppercase tracking-wider">
+                          {episode.extension.replace(".", "")}
+                        </span>
+
+                        {/* Custom watch history progress bar */}
+                        {progress !== undefined && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
+                            <div
+                              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+                              className="bg-cinema-amber h-full"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Episode Meta Info */}
+                      <div className="flex-1 flex flex-col justify-center min-w-0 py-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-sm md:text-base text-white truncate group-hover:text-cinema-amber transition-colors">
+                            {index + 1}. {episode.episodeTitle || episode.title}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-cinema-muted truncate mt-1 leading-relaxed">
+                          {episode.filename}
+                        </p>
+
+                        <div className="flex items-center gap-4 text-xs text-cinema-muted mt-3 font-medium">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            {formatDuration(episode.duration)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <HardDrive className="w-3.5 h-3.5" />
+                            {formatSize(episode.size)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

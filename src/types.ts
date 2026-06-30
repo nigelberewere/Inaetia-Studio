@@ -8,6 +8,12 @@ export interface Movie {
   thumbnail: string;
   extension: string;
   added: string;
+  category?: string;
+  subcategory?: string;
+  type?: "movie" | "episode" | "video";
+  showName?: string;
+  seasonName?: string;
+  episodeTitle?: string;
 }
 
 export interface Track {

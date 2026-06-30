@@ -146,7 +146,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [music, setMusic] = useState<Track[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [moviesLoaded, setMoviesLoaded] = useState<boolean>(false);
+  const [musicLoaded, setMusicLoaded] = useState<boolean>(false);
+  const [photosLoaded, setPhotosLoaded] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Search
@@ -166,33 +169,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Server Status
   const [status, setStatus] = useState<ServerStatus | null>(null);
 
-  // Fetch all media
-  const refreshLibrary = async () => {
+  const loadMovies = async (force = false) => {
+    if (moviesLoaded && !force) return;
     setLoading(true);
     setError(null);
     try {
-      const [moviesRes, musicRes, photosRes] = await Promise.all([
-        fetch("/api/movies"),
-        fetch("/api/music"),
-        fetch("/api/photos"),
-      ]);
-
-      if (!moviesRes.ok || !musicRes.ok || !photosRes.ok) {
-        throw new Error("One or more server endpoints failed to respond");
-      }
-
-      const moviesData = await moviesRes.json();
-      const musicData = await musicRes.json();
-      const photosData = await photosRes.json();
-
-      setMovies(moviesData);
-      setMusic(musicData);
-      setPhotos(photosData);
+      const res = await fetch("/api/movies");
+      if (!res.ok) throw new Error("Failed to load movies");
+      const data = await res.json();
+      setMovies(data);
+      setMoviesLoaded(true);
     } catch (err: any) {
-      console.error("Error loading library:", err);
-      setError("Server unreachable. Please check your network connection.");
+      console.error("Error loading movies:", err);
+      setError("Failed to fetch movies. Please check your network connection.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMusic = async (force = false) => {
+    if (musicLoaded && !force) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/music");
+      if (!res.ok) throw new Error("Failed to load music");
+      const data = await res.json();
+      setMusic(data);
+      setMusicLoaded(true);
+    } catch (err: any) {
+      console.error("Error loading music:", err);
+      setError("Failed to fetch music. Please check your network connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPhotos = async (force = false) => {
+    if (photosLoaded && !force) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/photos");
+      if (!res.ok) throw new Error("Failed to load photos");
+      const data = await res.json();
+      setPhotos(data);
+      setPhotosLoaded(true);
+    } catch (err: any) {
+      console.error("Error loading photos:", err);
+      setError("Failed to fetch photos. Please check your network connection.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch media on-demand based on visible screen
+  const refreshLibrary = async () => {
+    if (activeView === "home" || activeView === "movies") {
+      await loadMovies(true);
+    } else if (activeView === "music") {
+      await loadMusic(true);
+    } else if (activeView === "photos") {
+      await loadPhotos(true);
+    } else {
+      setLoading(true);
+      setError(null);
+      try {
+        const [moviesRes, musicRes, photosRes] = await Promise.all([
+          fetch("/api/movies"),
+          fetch("/api/music"),
+          fetch("/api/photos"),
+        ]);
+        if (moviesRes.ok) setMovies(await moviesRes.json());
+        if (musicRes.ok) setMusic(await musicRes.json());
+        if (photosRes.ok) setPhotos(await photosRes.json());
+        setMoviesLoaded(true);
+        setMusicLoaded(true);
+        setPhotosLoaded(true);
+      } catch (err) {
+        console.error("Error refreshing library:", err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -287,10 +345,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Initial loads
   useEffect(() => {
-    refreshLibrary();
     fetchStatus();
     fetchProfiles();
   }, []);
+
+  // Automatically fetch data on demand based on current profile and active view
+  useEffect(() => {
+    if (!currentProfile) return;
+
+    if (activeView === "home" || activeView === "movies") {
+      loadMovies();
+    } else if (activeView === "music") {
+      loadMusic();
+    } else if (activeView === "photos") {
+      loadPhotos();
+    }
+  }, [currentProfile, activeView]);
 
   useEffect(() => {
     fetchContinueWatching();

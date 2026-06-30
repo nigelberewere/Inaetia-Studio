@@ -348,6 +348,120 @@ function getDuration(filepath: string): Promise<number> {
   });
 }
 
+// Helper to parse category and TV show structure from relative file paths
+function parseVideoPath(relativePath: string, filename: string, title: string) {
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+  const parts = normalizedPath.split("/").filter((p) => p.length > 0);
+
+  let category = "Other";
+  let subcategory = "";
+  let type: "movie" | "episode" | "video" = "video";
+  let showName = "";
+  let seasonName = "";
+  let episodeTitle = title;
+
+  if (parts.length > 0) {
+    const rootDir = parts[0];
+    const rootLower = rootDir.toLowerCase();
+
+    // Determine category
+    if (rootLower === "cartoons") {
+      category = "Cartoons";
+    } else if (rootLower === "marvel movies") {
+      category = "Marvel Movies";
+    } else if (rootLower === "movies") {
+      category = "Movies";
+      type = "movie";
+    } else if (rootLower === "tv shows") {
+      category = "Tv Shows";
+      type = "episode";
+    } else if (rootLower === "videos") {
+      category = "Videos";
+    }
+
+    // Scan for season pattern
+    let seasonIndex = -1;
+    for (let i = 0; i < parts.length; i++) {
+      if (/^(season|s)\s*\d+/i.test(parts[i])) {
+        seasonIndex = i;
+        break;
+      }
+    }
+
+    if (seasonIndex !== -1) {
+      type = "episode";
+      seasonName = parts[seasonIndex];
+      if (seasonIndex > 0) {
+        showName = parts[seasonIndex - 1];
+      }
+      if (showName.toLowerCase() === "tv shows" && seasonIndex > 1) {
+        showName = parts[seasonIndex - 2];
+      }
+    } else {
+      // Direct structure fallbacks
+      if (rootLower === "tv shows") {
+        type = "episode";
+        if (parts.length >= 3) {
+          showName = parts[1];
+          seasonName = "Season 1";
+        } else if (parts.length === 2) {
+          showName = "General TV";
+          seasonName = "Season 1";
+        }
+      } else if (rootLower === "marvel movies" && parts[1] && parts[1].toLowerCase() === "tv shows") {
+        type = "episode";
+        if (parts.length >= 4) {
+          showName = parts[2];
+          seasonName = "Season 1";
+        } else if (parts.length === 3) {
+          showName = "General Marvel TV";
+          seasonName = "Season 1";
+        }
+      } else if (rootLower === "cartoons" && parts.length >= 3) {
+        // e.g. Cartoons/Avatar The Last Airbender/Episode 1.mp4
+        type = "episode";
+        showName = parts[1];
+        seasonName = "Season 1";
+      } else if (rootLower === "movies") {
+        type = "movie";
+      } else if (rootLower === "videos") {
+        type = "video";
+        if (parts[1]) {
+          subcategory = parts[1];
+        }
+      }
+    }
+  }
+
+  // Format and clean names
+  if (showName) {
+    showName = showName.replace(/_/g, " ").replace(/-/g, " ");
+  }
+  if (seasonName) {
+    const match = seasonName.match(/^(season|s)\s*(\d+)/i);
+    if (match) {
+      seasonName = `Season ${match[2]}`;
+    } else {
+      seasonName = seasonName.replace(/_/g, " ").replace(/-/g, " ");
+    }
+  } else if (type === "episode") {
+    seasonName = "Season 1";
+  }
+
+  // Clean episodeTitle/movieTitle from filename without extension
+  const ext = path.extname(filename);
+  episodeTitle = path.basename(filename, ext).replace(/_/g, " ").replace(/-/g, " ");
+
+  return {
+    category,
+    subcategory,
+    type,
+    showName,
+    seasonName,
+    episodeTitle,
+  };
+}
+
 // Rescan Libraries
 async function scanAllLibraries() {
   const startTime = Date.now();
@@ -397,6 +511,8 @@ async function scanAllLibraries() {
       size = 2.4 * 1024 * 1024 * 1024;
     }
 
+    const parsedMeta = parseVideoPath(relativePath, filename, title);
+
     return {
       id,
       title,
@@ -407,6 +523,7 @@ async function scanAllLibraries() {
       thumbnail: `/api/thumbnail/${id}`,
       extension: ext,
       added: stat.birthtime.toISOString(),
+      ...parsedMeta,
     };
   });
 
