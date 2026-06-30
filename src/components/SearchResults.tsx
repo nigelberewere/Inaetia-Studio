@@ -1,8 +1,7 @@
 import React from "react";
 import { useApp } from "../context/AppContext";
-import { Film, Music, Image as PhotoIcon, Play, Clock } from "lucide-react";
+import { Film, Music, Play, Clock } from "lucide-react";
 import MovieCard from "./MovieCard";
-import PhotoGrid from "./PhotoGrid";
 
 export default function SearchResults() {
   const { searchQuery, searchResults, isSearching, playTrack, music } = useApp();
@@ -35,8 +34,7 @@ export default function SearchResults() {
 
   const hasResults = 
     searchResults.movies.length > 0 || 
-    searchResults.music.length > 0 || 
-    searchResults.photos.length > 0;
+    searchResults.music.length > 0;
 
   if (isSearching) {
     return (
@@ -66,7 +64,7 @@ export default function SearchResults() {
           Search Results for <span className="text-cinema-amber">"{searchQuery}"</span>
         </h2>
         <p className="text-cinema-muted text-xs md:text-sm mt-1">
-          Found {searchResults.movies.length} movies, {searchResults.music.length} tracks, and {searchResults.photos.length} photos.
+          Found {searchResults.movies.length} movies and {searchResults.music.length} tracks.
         </p>
       </div>
 
@@ -144,16 +142,6 @@ export default function SearchResults() {
         </section>
       )}
 
-      {/* 3. PHOTOS SECTION */}
-      {searchResults.photos.length > 0 && (
-        <section className="space-y-4" id="search-section-photos">
-          <div className="flex items-center gap-2 border-b border-cinema-border pb-2 text-cinema-amber">
-            <PhotoIcon className="w-5 h-5" />
-            <h3 className="font-bold text-lg text-white">Matched Photos</h3>
-          </div>
-          <PhotoGrid photos={searchResults.photos} />
-        </section>
-      )}
     </div>
   );
 }

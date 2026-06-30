@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Movie, Track, Photo, ServerStatus, SearchResults, Profile, WatchHistoryItem } from "../types";
+import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem } from "../types";
 
-export type ViewType = "home" | "movies" | "music" | "photos" | "settings" | "search";
+export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search";
 
 interface AppContextType {
   activeView: ViewType;
@@ -10,7 +10,6 @@ interface AppContextType {
   // Library collections
   movies: Movie[];
   music: Track[];
-  photos: Photo[];
   loading: boolean;
   error: string | null;
   refreshLibrary: () => Promise<void>;
@@ -145,16 +144,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Library data
   const [movies, setMovies] = useState<Movie[]>([]);
   const [music, setMusic] = useState<Track[]>([]);
-  const [photos, setPhotos] = useState<Photo[]>([]);
   const [moviesLoaded, setMoviesLoaded] = useState<boolean>(false);
   const [musicLoaded, setMusicLoaded] = useState<boolean>(false);
-  const [photosLoaded, setPhotosLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Search
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchResults, setSearchResults] = useState<SearchResults>({ movies: [], music: [], photos: [] });
+  const [searchResults, setSearchResults] = useState<SearchResults>({ movies: [], music: [] });
   const [isSearching, setIsSearching] = useState<boolean>(false);
 
   // Video Player state
@@ -205,47 +202,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadPhotos = async (force = false) => {
-    if (photosLoaded && !force) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/photos");
-      if (!res.ok) throw new Error("Failed to load photos");
-      const data = await res.json();
-      setPhotos(data);
-      setPhotosLoaded(true);
-    } catch (err: any) {
-      console.error("Error loading photos:", err);
-      setError("Failed to fetch photos. Please check your network connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Fetch media on-demand based on visible screen
   const refreshLibrary = async () => {
     if (activeView === "home" || activeView === "movies") {
       await loadMovies(true);
     } else if (activeView === "music") {
       await loadMusic(true);
-    } else if (activeView === "photos") {
-      await loadPhotos(true);
     } else {
       setLoading(true);
       setError(null);
       try {
-        const [moviesRes, musicRes, photosRes] = await Promise.all([
+        const [moviesRes, musicRes] = await Promise.all([
           fetch("/api/movies"),
           fetch("/api/music"),
-          fetch("/api/photos"),
         ]);
         if (moviesRes.ok) setMovies(await moviesRes.json());
         if (musicRes.ok) setMusic(await musicRes.json());
-        if (photosRes.ok) setPhotos(await photosRes.json());
         setMoviesLoaded(true);
         setMusicLoaded(true);
-        setPhotosLoaded(true);
       } catch (err) {
         console.error("Error refreshing library:", err);
       } finally {
@@ -289,7 +263,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Perform search
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults({ movies: [], music: [], photos: [] });
+      setSearchResults({ movies: [], music: [] });
       setIsSearching(false);
       return;
     }
@@ -357,8 +331,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadMovies();
     } else if (activeView === "music") {
       loadMusic();
-    } else if (activeView === "photos") {
-      loadPhotos();
     }
   }, [currentProfile, activeView]);
 
@@ -373,7 +345,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setActiveView,
         movies,
         music,
-        photos,
         loading,
         error,
         refreshLibrary,

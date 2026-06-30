@@ -369,7 +369,7 @@ export default function Movies() {
         >
           <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="relative aspect-[21/9] w-full bg-gradient-to-t from-cinema-bg via-black/20 to-black/60 flex flex-col justify-end p-6 md:p-8">
+            <div className="relative aspect-[21/9] w-full bg-gradient-to-t from-cinema-bg via-black/20 to-black/60 flex flex-col justify-end p-6 md:p-8 shrink-0">
               {/* Close Button */}
               <button
                 onClick={() => setSelectedShow(null)}
@@ -395,7 +395,7 @@ export default function Movies() {
 
             {/* Seasons Tab Selector Row */}
             {showDetails.seasons.length > 1 && (
-              <div className="px-6 border-b border-cinema-border py-3 flex gap-2 overflow-x-auto">
+              <div className="px-6 border-b border-cinema-border py-3 flex gap-2 overflow-x-auto shrink-0">
                 {showDetails.seasons.map((season) => (
                   <button
                     key={season}

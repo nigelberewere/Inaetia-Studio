@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
-  Film, Music, Image as PhotoIcon, Cpu, ShieldAlert, Wifi 
+  Film, Music, Cpu, ShieldAlert, Wifi 
 } from "lucide-react";
 
 export default function Settings() {
@@ -166,12 +166,6 @@ export default function Settings() {
               <Music className="w-6 h-6 text-cinema-amber mb-2" />
               <span className="text-2xl font-bold text-white font-mono">{status?.music ?? 0}</span>
               <span className="text-[10px] text-cinema-muted font-bold uppercase mt-1">Tracks</span>
-            </div>
-
-            <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-4 flex flex-col items-center">
-              <PhotoIcon className="w-6 h-6 text-cinema-amber mb-2" />
-              <span className="text-2xl font-bold text-white font-mono">{status?.photos ?? 0}</span>
-              <span className="text-[10px] text-cinema-muted font-bold uppercase mt-1">Photos</span>
             </div>
           </div>
         </div>

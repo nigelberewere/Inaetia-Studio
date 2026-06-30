@@ -27,15 +27,6 @@ export interface Track {
   size: number;
 }
 
-export interface Photo {
-  id: string;
-  filename: string;
-  filepath: string;
-  thumbnail: string;
-  size: number;
-  date: string;
-}
-
 export interface StorageInfo {
   total: number;
   used: number;
@@ -47,13 +38,41 @@ export interface ServerStatus {
   storage: StorageInfo;
   movies: number;
   music: number;
-  photos: number;
 }
 
 export interface SearchResults {
   movies: Movie[];
   music: Track[];
-  photos: Photo[];
+}
+
+export interface Channel {
+  id: string;
+  name: string;
+  color: string;
+  channelNumber: number;
+  sourceFolder: string;
+  currentProgram: {
+    id: string;
+    title: string;
+    filename: string;
+    duration: number;
+    startedAt: string;
+    endsAt: string;
+    offsetSeconds: number;
+  } | null;
+}
+
+export interface ChannelProgram {
+  id: string;
+  title: string;
+  filename: string;
+  duration: number;
+}
+
+export interface EPGItem {
+  program: ChannelProgram;
+  startTime: string; // ISO timestamp
+  endTime: string;   // ISO timestamp
 }
 
 export interface WatchHistoryDetails {

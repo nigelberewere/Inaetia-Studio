@@ -71,6 +71,14 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   const [resumeTime, setResumeTime] = useState<number | null>(null);
   const [showResumeToast, setShowResumeToast] = useState(false);
 
+  // Detect format support
+  const isFormatUnsupported = !movie.extension.toLowerCase().match(/\.(mp4|webm)$/);
+  const [showFormatWarning, setShowFormatWarning] = useState(isFormatUnsupported);
+
+  useEffect(() => {
+    setShowFormatWarning(isFormatUnsupported);
+  }, [movie.id, isFormatUnsupported]);
+
   // Next episode autoplay states
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -332,6 +340,10 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
     if (video) {
       const current = video.currentTime;
       setCurrentTime(current);
+      // Auto-dismiss format warning if the video successfully starts playing
+      if (current > 0.5 && showFormatWarning) {
+        setShowFormatWarning(false);
+      }
     }
   };
 
@@ -356,9 +368,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
     }
     return `${m}:${pad(s)}`;
   };
-
-  // Detect format support
-  const isFormatUnsupported = !movie.extension.toLowerCase().match(/\.(mp4|webm)$/);
 
   return (
     <div 
@@ -440,11 +449,21 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
       )}
 
       {/* Warning Alert Banner for MKV/AVI/unsupported formats */}
-      {isFormatUnsupported && (
-        <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-20 bg-amber-500/10 backdrop-blur-md border border-amber-500/20 text-amber-200 p-3 rounded-lg flex items-start gap-2 text-xs">
+      {showFormatWarning && (
+        <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-20 bg-amber-500/15 backdrop-blur-md border border-amber-500/30 text-amber-200 p-3 rounded-lg flex items-start gap-2 text-xs">
           <AlertCircle className="w-5 h-5 text-cinema-amber shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-semibold text-cinema-amber">Format Warning: {movie.extension.toUpperCase()}</p>
+          <div className="space-y-1 flex-1">
+            <div className="flex justify-between items-start">
+              <p className="font-semibold text-cinema-amber">Format Warning: {movie.extension.toUpperCase()}</p>
+              <button 
+                onClick={() => setShowFormatWarning(false)}
+                className="text-amber-400 hover:text-white transition-colors p-0.5 rounded hover:bg-white/10"
+                title="Dismiss Warning"
+                id="btn-dismiss-format-warning"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <p>
               Your browser may not support this container natively. If playback fails, convert this file to H.264 <b>.mp4</b> using:
             </p>

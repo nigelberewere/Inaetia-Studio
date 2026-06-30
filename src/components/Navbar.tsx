@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useApp, ViewType } from "../context/AppContext";
-import { Search, Film, Music as MusicIcon, Image as PhotoIcon, Settings, X, Users, Trash2 } from "lucide-react";
+import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2 } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 export default function Navbar() {
@@ -102,16 +102,16 @@ export default function Navbar() {
           Music
         </button>
         <button
-          id="btn-nav-photos"
-          onClick={() => { clearSearch(); setActiveView("photos"); }}
+          id="btn-nav-livetv"
+          onClick={() => { clearSearch(); setActiveView("livetv"); }}
           className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
-            activeView === "photos"
+            activeView === "livetv"
               ? "bg-cinema-amber text-cinema-bg shadow-md"
               : "text-cinema-text hover:text-white hover:bg-white/5"
           }`}
         >
-          <PhotoIcon className="w-4 h-4" />
-          Photos
+          <TvIcon className="w-4 h-4" />
+          Live TV
         </button>
       </div>
 
@@ -163,11 +163,11 @@ export default function Navbar() {
             <MusicIcon className="w-5 h-5" />
           </button>
           <button
-            onClick={() => { clearSearch(); setActiveView("photos"); }}
-            className={`p-2 rounded-full ${activeView === "photos" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
-            title="Photos"
+            onClick={() => { clearSearch(); setActiveView("livetv"); }}
+            className={`p-2 rounded-full ${activeView === "livetv" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            title="Live TV"
           >
-            <PhotoIcon className="w-5 h-5" />
+            <TvIcon className="w-5 h-5" />
           </button>
         </div>
 

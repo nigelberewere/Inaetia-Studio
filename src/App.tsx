@@ -4,7 +4,7 @@ import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
 import Movies from "./pages/Movies";
 import Music from "./pages/Music";
-import Photos from "./pages/Photos";
+import LiveTV from "./pages/LiveTV";
 import Settings from "./pages/Settings";
 import SearchResults from "./components/SearchResults";
 import MusicPlayer from "./components/MusicPlayer";
@@ -28,7 +28,7 @@ function MainLayout() {
         {activeView === "home" && <Home />}
         {activeView === "movies" && <Movies />}
         {activeView === "music" && <Music />}
-        {activeView === "photos" && <Photos />}
+        {activeView === "livetv" && <LiveTV />}
         {activeView === "settings" && <Settings />}
         {activeView === "search" && <SearchResults />}
       </main>

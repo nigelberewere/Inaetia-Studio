@@ -32,7 +32,7 @@ const PICTURES_PATH = process.env.PICTURES_PATH || "/mnt/storage/Pictures";
 
 // Validate Environment Variables and Path Existence in Production
 if (!DEMO_MODE) {
-  const requiredPaths = { VIDEOS_PATH, MUSIC_PATH, PICTURES_PATH };
+  const requiredPaths = { VIDEOS_PATH, MUSIC_PATH };
   Object.entries(requiredPaths).forEach(([key, val]) => {
     if (!val) {
       console.warn(`⚠️  WARNING: ${key} environment variable is not defined.`);
@@ -86,7 +86,7 @@ const TRANSPARENT_GIF = Buffer.from(
 // Memory Caches
 let moviesCache: any[] = [];
 let musicCache: any[] = [];
-let photosCache: any[] = [];
+const playlistCache = new Map<string, any[]>();
 let cachesLastUpdated = 0;
 let hasPerformedInitialScan = false;
 const CACHE_LIFETIME = 5 * 60 * 1000; // 5 minutes
@@ -94,7 +94,6 @@ const CACHE_LIFETIME = 5 * 60 * 1000; // 5 minutes
 // In-memory indexing maps for stream lookup by MD5 ID
 const moviesIndex = new Map<string, string>(); // id -> full filepath
 const musicIndex = new Map<string, string>();  // id -> full filepath
-const photosIndex = new Map<string, string>(); // id -> full filepath
 
 const METADATA_CACHE_FILE = path.join(process.cwd(), "media-cache.json");
 
@@ -107,7 +106,6 @@ function loadPersistentCache() {
       if (parsed) {
         moviesCache = parsed.moviesCache || [];
         musicCache = parsed.musicCache || [];
-        photosCache = parsed.photosCache || [];
         cachesLastUpdated = parsed.cachesLastUpdated || Date.now();
         hasPerformedInitialScan = true;
         
@@ -118,10 +116,7 @@ function loadPersistentCache() {
         if (parsed.musicIndexList) {
           parsed.musicIndexList.forEach(([id, file]: [string, string]) => musicIndex.set(id, file));
         }
-        if (parsed.photosIndexList) {
-          parsed.photosIndexList.forEach(([id, file]: [string, string]) => photosIndex.set(id, file));
-        }
-        console.log(`💾 Metadata cache loaded successfully! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}, Photos: ${photosCache.length}`);
+        console.log(`💾 Metadata cache loaded successfully! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}`);
       }
     } else {
       console.log("💾 No persistent metadata cache file found. Will perform a full scan on startup.");
@@ -136,11 +131,9 @@ function savePersistentCache() {
     const dataToSave = {
       moviesCache,
       musicCache,
-      photosCache,
       cachesLastUpdated,
       moviesIndexList: Array.from(moviesIndex.entries()),
       musicIndexList: Array.from(musicIndex.entries()),
-      photosIndexList: Array.from(photosIndex.entries()),
     };
     fs.writeFileSync(METADATA_CACHE_FILE, JSON.stringify(dataToSave, null, 2), "utf8");
     console.log(`💾 Metadata cache saved to disk: ${METADATA_CACHE_FILE}`);
@@ -470,6 +463,9 @@ async function scanAllLibraries() {
   console.log("Scanning libraries...");
   ensureDirs();
 
+  // Clear playlist cache to pick up any additions/deletions on rescan
+  playlistCache.clear();
+
   // Create fast lookup maps of existing cache items to reuse duration
   const existingMoviesMap = new Map<string, any>();
   moviesCache.forEach((m) => {
@@ -485,8 +481,21 @@ async function scanAllLibraries() {
   const videoExts = [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
   const videoFiles = getFilesRecursively(targetVideosDir, videoExts);
   
+  // Also scan MUSIC_VIDEOS_PATH if defined, exists and is not already inside targetVideosDir
+  const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
+  if (envMusicVideos && fs.existsSync(envMusicVideos)) {
+    const isUnderVideos = path.resolve(envMusicVideos).startsWith(path.resolve(targetVideosDir));
+    if (!isUnderVideos) {
+      const musicVideoFiles = getFilesRecursively(envMusicVideos, videoExts);
+      videoFiles.push(...musicVideoFiles);
+    }
+  }
+  
   const moviePromises = videoFiles.map(async (file) => {
-    const relativePath = path.relative(targetVideosDir, file);
+    const isUnderMusicVideo = envMusicVideos && file.startsWith(path.resolve(envMusicVideos));
+    const relativePath = isUnderMusicVideo
+      ? path.relative(path.dirname(envMusicVideos), file)
+      : path.relative(targetVideosDir, file);
     const filename = path.basename(file);
     const ext = path.extname(file);
     const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
@@ -582,37 +591,13 @@ async function scanAllLibraries() {
 
   musicCache = await Promise.all(musicPromises);
 
-  // 3. Scan Photos
-  const photoExts = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
-  const photoFiles = getFilesRecursively(targetPicturesDir, photoExts);
-
-  const photoPromises = photoFiles.map(async (file) => {
-    const relativePath = path.relative(targetPicturesDir, file);
-    const filename = path.basename(file);
-    
-    const id = crypto.createHash("md5").update(file).digest("hex");
-    photosIndex.set(id, file);
-
-    const stat = fs.statSync(file);
-
-    return {
-      id,
-      filename,
-      filepath: relativePath,
-      thumbnail: `/api/photos/${id}`, // Serves the photo itself or we can resize it
-      size: stat.size,
-      date: stat.birthtime.toISOString(),
-    };
-  });
-
-  photosCache = await Promise.all(photoPromises);
   cachesLastUpdated = Date.now();
   hasPerformedInitialScan = true;
 
   savePersistentCache();
 
   const durationMs = Date.now() - startTime;
-  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}, Photos: ${photosCache.length} (DEMO_MODE: ${DEMO_MODE ? "ON" : "OFF"})`);
+  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length} (DEMO_MODE: ${DEMO_MODE ? "ON" : "OFF"})`);
 }
 
 // Throttled scan execution guard to prevent overlapping concurrent scans
@@ -1030,28 +1015,288 @@ app.get("/api/music/stream/:id", (req, res) => {
   streamMediaFile(filepath, mimeType, req, res);
 });
 
-// 7. GET /api/photos
-app.get("/api/photos", async (req, res) => {
+// ============================================================================
+// LIVE TV / CHANNEL SCHEDULING ALGORITHM & HELPERS
+// ============================================================================
+
+function seededRandom(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i) | 0;
+  }
+  return function() {
+    h = Math.imul(h ^ h >>> 16, 2246822507) | 0;
+    h = Math.imul(h ^ h >>> 13, 3266489909) | 0;
+    return ((h ^ h >>> 16) >>> 0) / 4294967296;
+  };
+}
+
+function getSeededShuffle<T>(array: T[], seed: string): T[] {
+  const shuffled = [...array];
+  const rng = seededRandom(seed);
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const temp = shuffled[i];
+    shuffled[i] = shuffled[j];
+    shuffled[j] = temp;
+  }
+  return shuffled;
+}
+
+interface ChannelDir {
+  name: string;
+  path: string;
+  isMusicVideos?: boolean;
+}
+
+function getChannelDirectories(): ChannelDir[] {
+  const dirs: ChannelDir[] = [];
+  
+  // 1. Scan immediate subfolders of targetVideosDir
+  if (fs.existsSync(targetVideosDir)) {
+    try {
+      const subfolders = fs.readdirSync(targetVideosDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
+        .map(dirent => dirent.name);
+      
+      subfolders.forEach(name => {
+        dirs.push({
+          name,
+          path: path.join(targetVideosDir, name)
+        });
+      });
+    } catch (err) {
+      console.error("Error scanning subfolders in targetVideosDir:", err);
+    }
+  }
+  
+  // 2. Check if process.env.MUSIC_VIDEOS_PATH exists and is not already included
+  const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
+  if (envMusicVideos && fs.existsSync(envMusicVideos)) {
+    const alreadyAdded = dirs.some(d => path.resolve(d.path) === path.resolve(envMusicVideos));
+    if (!alreadyAdded) {
+      dirs.push({
+        name: "Music Videos",
+        path: envMusicVideos,
+        isMusicVideos: true
+      });
+    }
+  }
+  
+  return dirs;
+}
+
+function getChannelsList() {
+  const dirs = getChannelDirectories();
+  const channelColors = ["#E11D48", "#2563EB", "#059669", "#D97706", "#7C3AED", "#DB2777", "#0891B2"];
+  
+  return dirs.map((dir, i) => {
+    const id = dir.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    return {
+      id,
+      name: dir.name,
+      color: channelColors[i % channelColors.length],
+      channelNumber: i + 1,
+      sourceFolder: path.resolve(dir.path)
+    };
+  });
+}
+
+function getShuffledPlaylist(channelId: string, dateStr: string, channelSourceFolder: string) {
+  const cacheKey = `${channelId}-${dateStr}`;
+  if (playlistCache.has(cacheKey)) {
+    return playlistCache.get(cacheKey)!;
+  }
+
+  const channelVideos = moviesCache.filter((m) => {
+    const fullPath = moviesIndex.get(m.id);
+    return fullPath && fullPath.startsWith(channelSourceFolder);
+  });
+
+  // Sort alphabetically to guarantee consistent initial order
+  channelVideos.sort((a, b) => a.filepath.localeCompare(b.filepath));
+
+  const seed = `${channelId}-${dateStr}`;
+  const shuffled = getSeededShuffle(channelVideos, seed);
+  playlistCache.set(cacheKey, shuffled);
+  return shuffled;
+}
+
+function getLiveProgramAt(channelId: string, timestamp: number) {
+  const channels = getChannelsList();
+  const channel = channels.find(c => c.id === channelId);
+  if (!channel) return null;
+  
+  // Use UTC Date for deterministic global synchronization
+  const dateObj = new Date(timestamp);
+  const dateStr = `${dateObj.getUTCFullYear()}-${String(dateObj.getUTCMonth() + 1).padStart(2, "0")}-${String(dateObj.getUTCDate()).padStart(2, "0")}`;
+  
+  // Midnight UTC epoch of that day
+  const epoch = Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate());
+  
+  const shuffled = getShuffledPlaylist(channelId, dateStr, channel.sourceFolder);
+  if (shuffled.length === 0) return null;
+  
+  const totalRuntime = shuffled.reduce((sum, item) => sum + (item.duration || 120), 0);
+  if (totalRuntime === 0) return null;
+  
+  const elapsedSeconds = Math.floor((timestamp - epoch) / 1000);
+  const position = ((elapsedSeconds % totalRuntime) + totalRuntime) % totalRuntime;
+  
+  let currentSum = 0;
+  let activeIndex = -1;
+  for (let i = 0; i < shuffled.length; i++) {
+    const dur = shuffled[i].duration || 120;
+    if (currentSum + dur > position) {
+      activeIndex = i;
+      break;
+    }
+    currentSum += dur;
+  }
+  
+  if (activeIndex === -1) {
+    activeIndex = shuffled.length - 1;
+  }
+  
+  const currentProgram = shuffled[activeIndex];
+  const offsetSeconds = position - currentSum;
+  const startedAt = new Date(epoch + currentSum * 1000).toISOString();
+  const endsAt = new Date(epoch + (currentSum + (currentProgram.duration || 120)) * 1000).toISOString();
+  const nextProgram = shuffled[(activeIndex + 1) % shuffled.length];
+  
+  return {
+    channel,
+    currentProgram,
+    offsetSeconds,
+    startedAt,
+    endsAt,
+    nextProgram: nextProgram ? {
+      id: nextProgram.id,
+      title: nextProgram.title,
+      startsAt: endsAt
+    } : null
+  };
+}
+
+function getEPGForChannel(channelId: string, startTimestamp: number, hours: number) {
+  const epg: any[] = [];
+  const endTimestamp = startTimestamp + hours * 60 * 60 * 1000;
+  
+  let currentTimestamp = startTimestamp;
+  while (currentTimestamp < endTimestamp) {
+    const live = getLiveProgramAt(channelId, currentTimestamp);
+    if (!live) break;
+    
+    const programEndsAt = new Date(live.endsAt).getTime();
+    
+    epg.push({
+      program: live.currentProgram,
+      startTime: live.startedAt,
+      endTime: live.endsAt
+    });
+    
+    // Advance currentTimestamp to the end of the current program
+    // Add 100ms to avoid floating point or boundary loops
+    currentTimestamp = programEndsAt + 100;
+  }
+  
+  return epg;
+}
+
+// ============================================================================
+// LIVE TV / CHANNEL API ENDPOINTS
+// ============================================================================
+
+// GET /api/channels
+app.get("/api/channels", async (req, res) => {
   try {
     await checkCache();
-    res.json(photosCache);
+    const channels = getChannelsList();
+    const nowTimestamp = Date.now();
+    const channelsWithLive = channels.map(c => {
+      const live = getLiveProgramAt(c.id, nowTimestamp);
+      return {
+        ...c,
+        currentProgram: live ? {
+          id: live.currentProgram.id,
+          title: live.currentProgram.title,
+          filename: live.currentProgram.filename,
+          duration: live.currentProgram.duration,
+          startedAt: live.startedAt,
+          endsAt: live.endsAt,
+          offsetSeconds: live.offsetSeconds
+        } : null
+      };
+    });
+    res.json(channelsWithLive);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to scan photos", details: err.message });
+    res.status(500).json({ error: "Failed to load channels", details: err.message });
   }
 });
 
-// 8. GET /api/photos/:id
-app.get("/api/photos/:id", (req, res) => {
-  const id = req.params.id;
-  const filepath = photosIndex.get(id);
-
-  if (!filepath) {
-    return res.status(404).json({ error: "Photo ID not found" });
+// GET /api/channels/:id/now
+app.get("/api/channels/:id/now", async (req, res) => {
+  try {
+    await checkCache();
+    const live = getLiveProgramAt(req.params.id, Date.now());
+    if (!live) {
+      return res.status(404).json({ error: `Channel with id ${req.params.id} not found or has no content` });
+    }
+    res.json(live);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to get live program info", details: err.message });
   }
+});
 
-  const mimeType = getMimeType(path.extname(filepath));
-  res.setHeader("Content-Type", mimeType);
-  fs.createReadStream(filepath).pipe(res);
+// GET /api/channels/:id/epg
+app.get("/api/channels/:id/epg", async (req, res) => {
+  try {
+    await checkCache();
+    const hours = parseInt(req.query.hours as string || "6", 10);
+    const epg = getEPGForChannel(req.params.id, Date.now(), hours);
+    res.json(epg);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch channel EPG", details: err.message });
+  }
+});
+
+// GET /api/channels/epg/all
+app.get("/api/channels/epg/all", async (req, res) => {
+  try {
+    await checkCache();
+    const hours = parseInt(req.query.hours as string || "6", 10);
+    const channels = getChannelsList();
+    const nowTimestamp = Date.now();
+    const allEpg: Record<string, any> = {};
+    for (const c of channels) {
+      allEpg[c.id] = getEPGForChannel(c.id, nowTimestamp, hours);
+    }
+    res.json(allEpg);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch all EPG guides", details: err.message });
+  }
+});
+
+// GET /api/channels/:id/stream
+app.get("/api/channels/:id/stream", async (req, res) => {
+  try {
+    await checkCache();
+    const channelId = req.params.id;
+    const live = getLiveProgramAt(channelId, Date.now());
+    if (!live || !live.currentProgram) {
+      return res.status(404).json({ error: "No active broadcast on this channel right now" });
+    }
+
+    const filepath = moviesIndex.get(live.currentProgram.id);
+    if (!filepath) {
+      return res.status(404).json({ error: "Source file not found for the active broadcast" });
+    }
+
+    const mimeType = getMimeType(path.extname(filepath));
+    streamMediaFile(filepath, mimeType, req, res);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to stream live program", details: err.message });
+  }
 });
 
 // 9. GET /api/search?q=query
@@ -1061,7 +1306,7 @@ app.get("/api/search", async (req, res) => {
     const query = (req.query.q as string || "").toLowerCase().trim();
 
     if (!query) {
-      return res.json({ movies: [], music: [], photos: [] });
+      return res.json({ movies: [], music: [] });
     }
 
     const filteredMovies = moviesCache.filter(
@@ -1076,14 +1321,9 @@ app.get("/api/search", async (req, res) => {
         t.album.toLowerCase().includes(query)
     );
 
-    const filteredPhotos = photosCache.filter(
-      (p) => p.filename.toLowerCase().includes(query) || p.filepath.toLowerCase().includes(query)
-    );
-
     res.json({
       movies: filteredMovies,
       music: filteredMusic,
-      photos: filteredPhotos,
     });
   } catch (err: any) {
     res.status(500).json({ error: "Search query failed", details: err.message });
@@ -1126,7 +1366,6 @@ app.get("/api/status", async (req, res) => {
         storage: { total, used, free },
         movies: moviesCache.length,
         music: musicCache.length,
-        photos: photosCache.length,
       });
     });
   } catch (err: any) {
@@ -1138,7 +1377,7 @@ app.get("/api/status", async (req, res) => {
 app.post("/api/rescan", async (req, res) => {
   try {
     await triggerScan();
-    res.json({ success: true, movies: moviesCache.length, music: musicCache.length, photos: photosCache.length });
+    res.json({ success: true, movies: moviesCache.length, music: musicCache.length });
   } catch (err: any) {
     res.status(500).json({ error: "Rescan triggered failure", details: err.message });
   }
