@@ -62,6 +62,8 @@ const targetPicturesDir = DEMO_MODE
   ? demoPicturesDir
   : (fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures"));
 
+const hasMntStorage = !DEMO_MODE && fs.existsSync("/mnt/storage");
+
 const thumbsCacheDir = "/tmp/nigelcloud/thumbs";
 
 // Ensure folders exist
@@ -1093,10 +1095,11 @@ app.get("/api/status", async (req, res) => {
   try {
     await checkCache();
 
-    // Get storage info from 'df' (representing either /mnt/storage or root / if missing)
-    const storagePath = fs.existsSync("/mnt/storage") ? "/mnt/storage" : ".";
+    // Get storage info representing either /mnt/storage or root / if missing (using static non-blocking flag)
+    const storagePath = hasMntStorage ? "/mnt/storage" : ".";
     
-    exec(`df -k "${storagePath}"`, (err, stdout) => {
+    // Execute df with -P for standard POSIX output (avoid split lines) and a short timeout to prevent blocking on network errors/stale mounts
+    exec(`df -P -k "${storagePath}"`, { timeout: 1500, killSignal: "SIGKILL" }, (err, stdout) => {
       let total = 4000 * 1024 * 1024 * 1024; // Mock standard 4TB cinema drive
       let free = 1800 * 1024 * 1024 * 1024;
       let used = total - free;
@@ -1106,9 +1109,14 @@ app.get("/api/status", async (req, res) => {
         if (lines.length >= 2) {
           const parts = lines[1].replace(/\s+/g, " ").split(" ");
           if (parts.length >= 4) {
-            total = parseInt(parts[1], 10) * 1024;
-            used = parseInt(parts[2], 10) * 1024;
-            free = parseInt(parts[3], 10) * 1024;
+            const parsedTotal = parseInt(parts[1], 10) * 1024;
+            const parsedUsed = parseInt(parts[2], 10) * 1024;
+            const parsedFree = parseInt(parts[3], 10) * 1024;
+            if (!isNaN(parsedTotal) && !isNaN(parsedUsed) && !isNaN(parsedFree)) {
+              total = parsedTotal;
+              used = parsedUsed;
+              free = parsedFree;
+            }
           }
         }
       }
