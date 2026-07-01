@@ -13,6 +13,7 @@ export default function RadioAudioEngine() {
   } = useApp();
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentTrackIdRef = useRef<string | null>(null);
 
   // Sync volume with active state
   useEffect(() => {
@@ -30,8 +31,10 @@ export default function RadioAudioEngine() {
       const streamUrl = `/api/radio/stations/${activeStation.id}/stream?_t=${Date.now()}`;
       
       const isCurrentStationStream = audio.src.includes(`/api/radio/stations/${activeStation.id}/stream`);
+      const isSameTrack = currentTrackIdRef.current === radioTrack.id;
       
-      if (!isCurrentStationStream) {
+      if (!isCurrentStationStream || !isSameTrack) {
+        currentTrackIdRef.current = radioTrack.id;
         audio.src = streamUrl;
         audio.load();
         
