@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem } from "../types";
+import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, RadioStation } from "../types";
 import { safeFetch } from "../utils";
 
-export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search";
+export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
 
 interface AppContextType {
   activeView: ViewType;
@@ -38,6 +38,19 @@ interface AppContextType {
   playTrack: (track: Track, queue?: Track[]) => void;
   playNextTrack: () => void;
   playPrevTrack: () => void;
+
+  // Radio Player state
+  activeStation: RadioStation | null;
+  isPlayingRadio: boolean;
+  radioTrack: Track | null;
+  radioOffsetSeconds: number;
+  radioVolume: number;
+  tuneToStation: (stationId: string) => Promise<void>;
+  nextStation: () => Promise<void>;
+  prevStation: () => Promise<void>;
+  stopRadio: () => void;
+  setRadioVolume: (volume: number) => void;
+  setIsPlayingRadio: (playing: boolean) => void;
 
   // Server stats
   status: ServerStatus | null;
@@ -164,6 +177,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [queueIndex, setQueueIndex] = useState<number>(-1);
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
 
+  // Radio Player state
+  const [activeStation, setActiveStation] = useState<RadioStation | null>(null);
+  const [isPlayingRadio, setIsPlayingRadio] = useState<boolean>(false);
+  const [radioTrack, setRadioTrack] = useState<Track | null>(null);
+  const [radioOffsetSeconds, setRadioOffsetSeconds] = useState<number>(0);
+  const [radioVolume, setRadioVolume] = useState<number>(0.8);
+  const [wasRadioPlayingBeforeVideo, setWasRadioPlayingBeforeVideo] = useState<boolean>(false);
+
   // Server Status
   const [status, setStatus] = useState<ServerStatus | null>(null);
 
@@ -289,6 +310,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Audio queue handlers
   const playTrack = (track: Track, queue: Track[] = []) => {
+    // Pause radio if playing
+    setIsPlayingRadio(false);
+
     setCurrentTrack(track);
     setIsPlayingAudio(true);
     
@@ -317,6 +341,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCurrentTrack(playingQueue[prevIdx]);
     setIsPlayingAudio(true);
   };
+
+  // Radio actions
+  const tuneToStation = async (stationId: string) => {
+    try {
+      // Pause normal music player
+      setIsPlayingAudio(false);
+      setCurrentTrack(null);
+
+      const res = await safeFetch(`/api/radio/stations/${stationId}/now`);
+      if (res.ok) {
+        const data = await res.json();
+        setActiveStation(data.station);
+        setRadioTrack(data.currentTrack);
+        setRadioOffsetSeconds(data.offsetSeconds);
+        setIsPlayingRadio(true);
+      } else {
+        console.error("Failed to tune to station", stationId);
+      }
+    } catch (err) {
+      console.error("Error tuning to radio station:", err);
+    }
+  };
+
+  const nextStation = async () => {
+    if (!activeStation) return;
+    try {
+      const res = await safeFetch("/api/radio/stations");
+      if (res.ok) {
+        const stations: RadioStation[] = await res.json();
+        const currentIndex = stations.findIndex(s => s.id === activeStation.id);
+        if (currentIndex !== -1) {
+          const nextIndex = (currentIndex + 1) % stations.length;
+          await tuneToStation(stations[nextIndex].id);
+        }
+      }
+    } catch (err) {
+      console.error("Error cycling to next station:", err);
+    }
+  };
+
+  const prevStation = async () => {
+    if (!activeStation) return;
+    try {
+      const res = await safeFetch("/api/radio/stations");
+      if (res.ok) {
+        const stations: RadioStation[] = await res.json();
+        const currentIndex = stations.findIndex(s => s.id === activeStation.id);
+        if (currentIndex !== -1) {
+          const prevIndex = currentIndex === 0 ? stations.length - 1 : currentIndex - 1;
+          await tuneToStation(stations[prevIndex].id);
+        }
+      }
+    } catch (err) {
+      console.error("Error cycling to prev station:", err);
+    }
+  };
+
+  const stopRadio = () => {
+    setActiveStation(null);
+    setIsPlayingRadio(false);
+    setRadioTrack(null);
+    setRadioOffsetSeconds(0);
+  };
+
+  // Video playback auto-pause/resume handler
+  useEffect(() => {
+    if (currentVideo && isPlayingRadio) {
+      setIsPlayingRadio(false);
+      setWasRadioPlayingBeforeVideo(true);
+    } else if (!currentVideo && wasRadioPlayingBeforeVideo) {
+      setWasRadioPlayingBeforeVideo(false);
+      if (activeStation) {
+        tuneToStation(activeStation.id);
+      }
+    }
+  }, [currentVideo, isPlayingRadio, wasRadioPlayingBeforeVideo, activeStation]);
 
   // Initial loads
   useEffect(() => {
@@ -367,6 +467,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         playTrack,
         playNextTrack,
         playPrevTrack,
+        activeStation,
+        isPlayingRadio,
+        radioTrack,
+        radioOffsetSeconds,
+        radioVolume,
+        tuneToStation,
+        nextStation,
+        prevStation,
+        stopRadio,
+        setRadioVolume,
+        setIsPlayingRadio,
         status,
         fetchStatus,
         currentProfile,

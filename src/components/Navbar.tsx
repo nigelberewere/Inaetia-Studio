@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useApp, ViewType } from "../context/AppContext";
-import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2 } from "lucide-react";
+import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2, Radio as RadioIcon } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 export default function Navbar() {
@@ -90,18 +90,6 @@ export default function Navbar() {
           Movies
         </button>
         <button
-          id="btn-nav-music"
-          onClick={() => { clearSearch(); setActiveView("music"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
-            activeView === "music"
-              ? "bg-cinema-amber text-cinema-bg shadow-md"
-              : "text-cinema-text hover:text-white hover:bg-white/5"
-          }`}
-        >
-          <MusicIcon className="w-4 h-4" />
-          Music
-        </button>
-        <button
           id="btn-nav-livetv"
           onClick={() => { clearSearch(); setActiveView("livetv"); }}
           className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
@@ -112,6 +100,30 @@ export default function Navbar() {
         >
           <TvIcon className="w-4 h-4" />
           Live TV
+        </button>
+        <button
+          id="btn-nav-radio"
+          onClick={() => { clearSearch(); setActiveView("radio"); }}
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+            activeView === "radio" || activeView === "radioguide"
+              ? "bg-cinema-amber text-cinema-bg shadow-md"
+              : "text-cinema-text hover:text-white hover:bg-white/5"
+          }`}
+        >
+          <RadioIcon className="w-4 h-4" />
+          Radio
+        </button>
+        <button
+          id="btn-nav-music"
+          onClick={() => { clearSearch(); setActiveView("music"); }}
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+            activeView === "music"
+              ? "bg-cinema-amber text-cinema-bg shadow-md"
+              : "text-cinema-text hover:text-white hover:bg-white/5"
+          }`}
+        >
+          <MusicIcon className="w-4 h-4" />
+          Music
         </button>
       </div>
 
@@ -156,18 +168,25 @@ export default function Navbar() {
             <Film className="w-5 h-5" />
           </button>
           <button
-            onClick={() => { clearSearch(); setActiveView("music"); }}
-            className={`p-2 rounded-full ${activeView === "music" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
-            title="Music"
-          >
-            <MusicIcon className="w-5 h-5" />
-          </button>
-          <button
             onClick={() => { clearSearch(); setActiveView("livetv"); }}
             className={`p-2 rounded-full ${activeView === "livetv" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Live TV"
           >
             <TvIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => { clearSearch(); setActiveView("radio"); }}
+            className={`p-2 rounded-full ${activeView === "radio" || activeView === "radioguide" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            title="Radio"
+          >
+            <RadioIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => { clearSearch(); setActiveView("music"); }}
+            className={`p-2 rounded-full ${activeView === "music" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            title="Music"
+          >
+            <MusicIcon className="w-5 h-5" />
           </button>
         </div>
 

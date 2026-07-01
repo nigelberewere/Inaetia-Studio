@@ -204,22 +204,50 @@ loadPersistentCache();
 
 // Generate mock media files if folder is empty so app works immediately in preview
 function generateMockMedia() {
-  if (!DEMO_MODE) {
-    console.log("Production Mode: Demo media generation is disabled.");
+  const videosEmpty = getFilesRecursively(targetVideosDir, [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"]).length === 0;
+  const musicEmpty = getFilesRecursively(targetMusicDir, [".mp3", ".flac", ".m4a", ".wav", ".ogg", ".aac"]).length === 0;
+  
+  if (!videosEmpty && !musicEmpty) {
+    console.log("Media folders are already populated. Skipping mock media generation.");
     return;
   }
+  
+  console.log("Target media folders are empty. Generating mock/demo media assets so the app works instantly...");
+
   exec("ffmpeg -version", (err) => {
     if (err) {
-      console.log("ffmpeg not detected, skipping mock media generation.");
+      console.log("ffmpeg not detected, using mock file fallbacks.");
       // Create minimal text file fallbacks just in case
-      const testVideo = path.join(targetVideosDir, "Welcome_to_NigelCloud_Cinema.mp4");
+      const testVideo = path.join(targetVideosDir, "Welcome_to_NigelCloud_Cinema_120s.mp4");
       if (!fs.existsSync(testVideo)) {
         fs.writeFileSync(testVideo, "Fake MP4 video content for testing");
       }
-      const testMusic = path.join(targetMusicDir, "Ambient_Chords_Demo.mp3");
-      if (!fs.existsSync(testMusic)) {
-        fs.writeFileSync(testMusic, "Fake MP3 audio content for testing");
-      }
+      
+      const tracks = [
+        { name: "Ambient_Chords_Demo_180s.mp3", folder: "" },
+        { name: "Late_Night_Sax_Solitude_300s.mp3", folder: "" },
+        { name: "Morning_Beats_Acoustic_Sunrise_150s.mp3", folder: "Nigel Solo/Morning Beats" },
+        { name: "Cinema_Ambient_Amber_Gold_Beats_120s.mp3", folder: "Amber Collective/Cinema Ambient" }
+      ];
+
+      tracks.forEach(tr => {
+        const parentDir = tr.folder ? path.join(targetMusicDir, tr.folder) : targetMusicDir;
+        if (!fs.existsSync(parentDir)) {
+          fs.mkdirSync(parentDir, { recursive: true });
+        }
+        const full = path.join(parentDir, tr.name);
+        if (!fs.existsSync(full)) {
+          fs.writeFileSync(full, "Fake MP3 audio content for testing");
+        }
+        // Also copy nested ones to root for extra discovery
+        if (tr.folder) {
+          const rootFull = path.join(targetMusicDir, tr.name);
+          if (!fs.existsSync(rootFull)) {
+            try { fs.copyFileSync(full, rootFull); } catch (e) {}
+          }
+        }
+      });
+
       const testPhoto = path.join(targetPicturesDir, "Stunning_Vistas.jpg");
       if (!fs.existsSync(testPhoto)) {
         // Simple base64 of a 1x1 black pixel JPG
@@ -232,9 +260,9 @@ function generateMockMedia() {
     console.log("ffmpeg detected! Generating rich, valid, seekable sample media assets for preview...");
 
     // Generate Movie 1 (15s MP4)
-    const movie1 = path.join(targetVideosDir, "Nigels_Epic_Journey.mp4");
+    const movie1 = path.join(targetVideosDir, "Nigels_Epic_Journey_15s.mp4");
     if (!fs.existsSync(movie1)) {
-      console.log("Generating Nigels_Epic_Journey.mp4...");
+      console.log("Generating Nigels_Epic_Journey_15s.mp4...");
       exec(
         `ffmpeg -y -f lavfi -i "testsrc=duration=15:size=640x360:rate=24" -f lavfi -i "sine=frequency=440:duration=15" -c:v libx264 -preset ultrafast -c:a aac -pix_fmt yuv420p "${movie1}"`,
         (e) => { if (e) console.error("Failed to generate movie1", e); }
@@ -242,9 +270,9 @@ function generateMockMedia() {
     }
 
     // Generate Movie 2 (10s MKV)
-    const movie2 = path.join(targetVideosDir, "Cosmic_Symphony.mkv");
+    const movie2 = path.join(targetVideosDir, "Cosmic_Symphony_10s.mkv");
     if (!fs.existsSync(movie2)) {
-      console.log("Generating Cosmic_Symphony.mkv...");
+      console.log("Generating Cosmic_Symphony_10s.mkv...");
       exec(
         `ffmpeg -y -f lavfi -i "cellauto=duration=10:size=320x180:rate=15" -f lavfi -i "sine=frequency=220:duration=10" -c:v libx264 -preset ultrafast -c:a aac -pix_fmt yuv420p "${movie2}"`,
         (e) => { if (e) console.error("Failed to generate movie2", e); }
@@ -252,7 +280,6 @@ function generateMockMedia() {
     }
 
     // Generate Movie 3 (20s Large Mock MP4 to satisfy file > 2GB row check)
-    // To make it run fast but pretend to be large, we can create a 5s low complexity video
     const movie3 = path.join(targetVideosDir, "NigelCloud_Ultra_HD_Intro.mp4");
     if (!fs.existsSync(movie3)) {
       console.log("Generating NigelCloud_Ultra_HD_Intro.mp4...");
@@ -263,17 +290,16 @@ function generateMockMedia() {
     }
 
     // Generate Audio 1 (30s MP3)
-    const audio1 = path.join(targetMusicDir, "Acoustic_Sunrise.mp3");
+    const audio1 = path.join(targetMusicDir, "Acoustic_Sunrise_30s.mp3");
     const artist1Dir = path.join(targetMusicDir, "Nigel Solo/Morning Beats");
     if (!fs.existsSync(audio1)) {
       fs.mkdirSync(artist1Dir, { recursive: true });
-      const track1 = path.join(artist1Dir, "Acoustic_Sunrise.mp3");
-      console.log("Generating Acoustic_Sunrise.mp3...");
+      const track1 = path.join(artist1Dir, "Acoustic_Sunrise_30s.mp3");
+      console.log("Generating Acoustic_Sunrise_30s.mp3...");
       exec(
         `ffmpeg -y -f lavfi -i "sine=frequency=330:duration=30" -acodec libmp3lame "${track1}"`,
         (e) => {
           if (e) console.error("Failed to generate audio1", e);
-          // Also link it in root for scanning depth check
           try { fs.copyFileSync(track1, audio1); } catch (err) {}
         }
       );
@@ -281,13 +307,23 @@ function generateMockMedia() {
 
     // Generate Audio 2 (15s WAV)
     const artist2Dir = path.join(targetMusicDir, "Amber Collective/Cinema Ambient");
-    const track2 = path.join(artist2Dir, "Amber_Gold_Beats.wav");
+    const track2 = path.join(artist2Dir, "Amber_Gold_Beats_15s.wav");
     if (!fs.existsSync(track2)) {
       fs.mkdirSync(artist2Dir, { recursive: true });
-      console.log("Generating Amber_Gold_Beats.wav...");
+      console.log("Generating Amber_Gold_Beats_15s.wav...");
       exec(
         `ffmpeg -y -f lavfi -i "sine=frequency=550:duration=15" "${track2}"`,
         (e) => { if (e) console.error("Failed to generate audio2", e); }
+      );
+    }
+
+    // Generate Audio 3 (300s MP3 for Late Night smart radio)
+    const audio3 = path.join(targetMusicDir, "Late_Night_Sax_Solitude_300s.mp3");
+    if (!fs.existsSync(audio3)) {
+      console.log("Generating Late_Night_Sax_Solitude_300s.mp3...");
+      exec(
+        `ffmpeg -y -f lavfi -i "sine=frequency=220:duration=300" -acodec libmp3lame "${audio3}"`,
+        (e) => { if (e) console.error("Failed to generate audio3", e); }
       );
     }
 
@@ -395,6 +431,12 @@ function processFfprobeQueue() {
 // Helper to probe file duration using ffprobe with safe fallback
 function getDuration(filepath: string): Promise<number> {
   return new Promise((resolve) => {
+    const filename = path.basename(filepath);
+    const match = filename.match(/_(\d+)s/);
+    if (match) {
+      resolve(parseInt(match[1], 10));
+      return;
+    }
     ffprobeQueue.push({ filepath, resolve });
     processFfprobeQueue();
   });
@@ -658,6 +700,7 @@ async function scanAllLibraries() {
       filepath: relativePath,
       duration,
       size: stat.size,
+      added: stat.mtime.toISOString(),
     };
   });
 
@@ -1493,6 +1536,342 @@ app.get("/api/channels/:id/stream", async (req, res) => {
     streamMediaFile(filepath, mimeType, req, res);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to stream live program", details: err.message });
+  }
+});
+
+// ==========================================
+// RADIO SYSTEM SCHEDULING & ENDPOINTS
+// ==========================================
+const radioPlaylistCache = new Map<string, any[]>();
+let lastCheckedUtcDate = new Date().getUTCDate();
+
+function startMidnightRefreshJob() {
+  setInterval(() => {
+    const currentUtcDate = new Date().getUTCDate();
+    if (currentUtcDate !== lastCheckedUtcDate) {
+      console.log("⏰ Midnight UTC reached! Regenerating TV and Radio playlists...");
+      playlistCache.clear();
+      radioPlaylistCache.clear();
+      lastCheckedUtcDate = currentUtcDate;
+    }
+  }, 60 * 1000); // Check every minute
+}
+
+// Start the midnight monitor right away
+startMidnightRefreshJob();
+
+function getStationsList() {
+  const stations: any[] = [];
+  
+  // 1. NigelCloud FM
+  stations.push({
+    id: "nigelcloud-fm",
+    name: "NigelCloud FM",
+    stationNumber: 1,
+    color: "#3B82F6",
+    type: "smart",
+    trackCount: musicCache.length,
+    sourceFolder: undefined
+  });
+  
+  // 2. Top Hits Radio
+  const sortedByAdded = [...musicCache].sort((a, b) => {
+    const dateA = a.added ? new Date(a.added).getTime() : 0;
+    const dateB = b.added ? new Date(b.added).getTime() : 0;
+    return dateB - dateA;
+  });
+  const topHitsCount = Math.max(1, Math.ceil(musicCache.length * 0.2));
+  const topHitsTracks = sortedByAdded.slice(0, topHitsCount);
+  stations.push({
+    id: "top-hits-radio",
+    name: "Top Hits Radio",
+    stationNumber: 2,
+    color: "#EF4444",
+    type: "smart",
+    trackCount: topHitsTracks.length,
+    sourceFolder: undefined
+  });
+  
+  // 3. Late Night Radio
+  const lateNightTracks = musicCache.filter(t => t.duration > 240);
+  stations.push({
+    id: "late-night-radio",
+    name: "Late Night Radio",
+    stationNumber: 3,
+    color: "#8B5CF6",
+    type: "smart",
+    trackCount: lateNightTracks.length,
+    sourceFolder: undefined
+  });
+  
+  // 4. Shuffle Party
+  stations.push({
+    id: "shuffle-party",
+    name: "Shuffle Party",
+    stationNumber: 4,
+    color: "#10B981",
+    type: "smart",
+    trackCount: musicCache.length,
+    sourceFolder: undefined
+  });
+  
+  // 5. Folder-based stations
+  if (fs.existsSync(targetMusicDir)) {
+    try {
+      const subfolders = fs.readdirSync(targetMusicDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
+        .map(dirent => dirent.name);
+      
+      const folderColors = ["#F59E0B", "#EC4899", "#06B6D4", "#84CC16", "#6366F1", "#14B8A6", "#F97316"];
+      
+      subfolders.forEach((name, idx) => {
+        const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+        const folderPath = path.resolve(path.join(targetMusicDir, name));
+        
+        const tracksInFolder = musicCache.filter(t => {
+          const fullPath = musicIndex.get(t.id);
+          return fullPath && fullPath.startsWith(folderPath);
+        });
+        
+        stations.push({
+          id,
+          name: name,
+          stationNumber: 5 + idx,
+          color: folderColors[idx % folderColors.length],
+          type: "folder",
+          sourceFolder: folderPath,
+          trackCount: tracksInFolder.length
+        });
+      });
+    } catch (err) {
+      console.error("Error scanning music subfolders:", err);
+    }
+  }
+  
+  return stations;
+}
+
+function getStationTracks(stationId: string) {
+  if (stationId === "nigelcloud-fm" || stationId === "shuffle-party") {
+    return [...musicCache].sort((a, b) => a.filepath.localeCompare(b.filepath));
+  }
+  
+  if (stationId === "top-hits-radio") {
+    const sortedByAdded = [...musicCache].sort((a, b) => {
+      const dateA = a.added ? new Date(a.added).getTime() : 0;
+      const dateB = b.added ? new Date(b.added).getTime() : 0;
+      return dateB - dateA;
+    });
+    const topHitsCount = Math.max(1, Math.ceil(musicCache.length * 0.2));
+    const topHitsTracks = sortedByAdded.slice(0, topHitsCount);
+    return topHitsTracks.sort((a, b) => a.filepath.localeCompare(b.filepath));
+  }
+  
+  if (stationId === "late-night-radio") {
+    const lateNightTracks = musicCache.filter(t => t.duration > 240);
+    return lateNightTracks.sort((a, b) => a.filepath.localeCompare(b.filepath));
+  }
+  
+  const stations = getStationsList();
+  const station = stations.find(s => s.id === stationId);
+  if (!station || !station.sourceFolder) return [];
+  
+  const tracksInFolder = musicCache.filter(t => {
+    const fullPath = musicIndex.get(t.id);
+    return fullPath && fullPath.startsWith(station.sourceFolder);
+  });
+  
+  return tracksInFolder.sort((a, b) => a.filepath.localeCompare(b.filepath));
+}
+
+function getShuffledRadioPlaylist(stationId: string, dateStr: string) {
+  const cacheKey = `${stationId}-${dateStr}`;
+  if (radioPlaylistCache.has(cacheKey)) {
+    return radioPlaylistCache.get(cacheKey)!;
+  }
+  
+  const tracks = getStationTracks(stationId);
+  const seed = `${stationId}-${dateStr}`;
+  const shuffled = getSeededShuffle(tracks, seed);
+  radioPlaylistCache.set(cacheKey, shuffled);
+  return shuffled;
+}
+
+function getLiveRadioTrackAt(stationId: string, timestamp: number) {
+  const stations = getStationsList();
+  const station = stations.find(s => s.id === stationId);
+  if (!station) return null;
+  
+  const dateObj = new Date(timestamp);
+  const dateStr = `${dateObj.getUTCFullYear()}-${String(dateObj.getUTCMonth() + 1).padStart(2, "0")}-${String(dateObj.getUTCDate()).padStart(2, "0")}`;
+  
+  const epoch = Date.UTC(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate());
+  
+  const shuffled = getShuffledRadioPlaylist(stationId, dateStr);
+  if (shuffled.length === 0) return null;
+  
+  const totalRuntime = shuffled.reduce((sum, item) => sum + (item.duration || 120), 0);
+  if (totalRuntime === 0) return null;
+  
+  const elapsedSeconds = Math.floor((timestamp - epoch) / 1000);
+  const position = ((elapsedSeconds % totalRuntime) + totalRuntime) % totalRuntime;
+  
+  let currentSum = 0;
+  let activeIndex = -1;
+  for (let i = 0; i < shuffled.length; i++) {
+    const dur = shuffled[i].duration || 120;
+    if (currentSum + dur > position) {
+      activeIndex = i;
+      break;
+    }
+    currentSum += dur;
+  }
+  
+  if (activeIndex === -1) {
+    activeIndex = shuffled.length - 1;
+  }
+  
+  const currentTrack = shuffled[activeIndex];
+  const offsetSeconds = position - currentSum;
+  const loopNumber = Math.floor(elapsedSeconds / totalRuntime);
+  const startedAt = new Date(epoch + (loopNumber * totalRuntime + currentSum) * 1000).toISOString();
+  const endsAt = new Date(epoch + (loopNumber * totalRuntime + currentSum + (currentTrack.duration || 120)) * 1000).toISOString();
+  const nextTrack = shuffled[(activeIndex + 1) % shuffled.length];
+  
+  const progress = (currentTrack.duration && currentTrack.duration > 0) ? (offsetSeconds / currentTrack.duration) : 0;
+  
+  return {
+    station: {
+      ...station,
+      nowPlayingArtist: currentTrack.artist,
+      nowPlayingTitle: currentTrack.title,
+    },
+    currentTrack: {
+      id: currentTrack.id,
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: currentTrack.album,
+      duration: currentTrack.duration,
+      filepath: currentTrack.filepath,
+    },
+    offsetSeconds,
+    startedAt,
+    endsAt,
+    nextTrack: nextTrack ? {
+      title: nextTrack.title,
+      artist: nextTrack.artist,
+      startsAt: endsAt
+    } : null,
+    progress
+  };
+}
+
+function getRadioScheduleForStation(stationId: string, startTimestamp: number, hours: number) {
+  const schedule: any[] = [];
+  const endTimestamp = startTimestamp + hours * 60 * 60 * 1000;
+  
+  let currentTimestamp = startTimestamp;
+  while (currentTimestamp < endTimestamp) {
+    const live = getLiveRadioTrackAt(stationId, currentTimestamp);
+    if (!live) break;
+    
+    const trackEndsAt = new Date(live.endsAt).getTime();
+    
+    schedule.push({
+      track: live.currentTrack,
+      startTime: live.startedAt,
+      endTime: live.endsAt
+    });
+    
+    currentTimestamp = trackEndsAt + 100;
+  }
+  
+  return schedule;
+}
+
+// GET /api/radio/stations
+app.get("/api/radio/stations", async (req, res) => {
+  try {
+    await checkCache();
+    const stations = getStationsList();
+    const nowTimestamp = Date.now();
+    const stationsWithLive = stations.map(s => {
+      const live = getLiveRadioTrackAt(s.id, nowTimestamp);
+      return {
+        ...s,
+        currentTrack: live ? live.currentTrack : null,
+        nowPlayingArtist: live ? live.currentTrack.artist : "Unknown Artist",
+        nowPlayingTitle: live ? live.currentTrack.title : "Unknown Title",
+      };
+    });
+    res.json(stationsWithLive);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to load radio stations", details: err.message });
+  }
+});
+
+// GET /api/radio/stations/:id/now
+app.get("/api/radio/stations/:id/now", async (req, res) => {
+  try {
+    await checkCache();
+    const live = getLiveRadioTrackAt(req.params.id, Date.now());
+    if (!live) {
+      return res.status(404).json({ error: `Radio station with id ${req.params.id} not found or has no content` });
+    }
+    res.json(live);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to get live radio track info", details: err.message });
+  }
+});
+
+// GET /api/radio/stations/:id/schedule
+app.get("/api/radio/stations/:id/schedule", async (req, res) => {
+  try {
+    await checkCache();
+    const hours = parseInt(req.query.hours as string || "3", 10);
+    const schedule = getRadioScheduleForStation(req.params.id, Date.now(), hours);
+    res.json(schedule);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch station schedule", details: err.message });
+  }
+});
+
+// GET /api/radio/stations/schedule/all
+app.get("/api/radio/stations/schedule/all", async (req, res) => {
+  try {
+    await checkCache();
+    const hours = parseInt(req.query.hours as string || "3", 10);
+    const stations = getStationsList();
+    const nowTimestamp = Date.now();
+    const allSchedule: Record<string, any> = {};
+    for (const s of stations) {
+      allSchedule[s.id] = getRadioScheduleForStation(s.id, nowTimestamp, hours);
+    }
+    res.json(allSchedule);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch all radio schedule guides", details: err.message });
+  }
+});
+
+// GET /api/radio/stations/:id/stream
+app.get("/api/radio/stations/:id/stream", async (req, res) => {
+  try {
+    await checkCache();
+    const stationId = req.params.id;
+    const live = getLiveRadioTrackAt(stationId, Date.now());
+    if (!live || !live.currentTrack) {
+      return res.status(404).json({ error: "No active radio track on this station right now" });
+    }
+
+    const filepath = musicIndex.get(live.currentTrack.id);
+    if (!filepath) {
+      return res.status(404).json({ error: "Source file not found for the active radio track" });
+    }
+
+    const mimeType = getMimeType(path.extname(filepath));
+    streamMediaFile(filepath, mimeType, req, res);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to stream radio track", details: err.message });
   }
 });
 

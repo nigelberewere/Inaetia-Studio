@@ -109,3 +109,37 @@ export interface Profile {
   };
 }
 
+export interface RadioStation {
+  id: string;
+  name: string;
+  stationNumber: number;
+  color: string;
+  type: "smart" | "folder";
+  sourceFolder?: string;
+  trackCount: number;
+  currentTrack: Track | null;
+  nowPlayingArtist: string;
+  nowPlayingTitle: string;
+}
+
+export interface RadioNowPlaying {
+  station: RadioStation;
+  currentTrack: Track;
+  offsetSeconds: number;
+  startedAt: string;
+  endsAt: string;
+  nextTrack: {
+    title: string;
+    artist: string;
+    startsAt: string;
+  } | null;
+  progress: number;
+}
+
+export interface RadioEPGItem {
+  track: Track;
+  startTime: string; // ISO
+  endTime: string;   // ISO
+}
+
+

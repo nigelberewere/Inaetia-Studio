@@ -5,9 +5,13 @@ import Home from "./pages/Home";
 import Movies from "./pages/Movies";
 import Music from "./pages/Music";
 import LiveTV from "./pages/LiveTV";
+import Radio from "./pages/Radio";
+import RadioGuide from "./pages/RadioGuide";
 import Settings from "./pages/Settings";
 import SearchResults from "./components/SearchResults";
 import MusicPlayer from "./components/MusicPlayer";
+import RadioPlayer from "./components/RadioPlayer";
+import RadioAudioEngine from "./components/RadioAudioEngine";
 import VideoPlayer from "./components/VideoPlayer";
 import WhosWatching from "./components/WhosWatching";
 
@@ -29,12 +33,20 @@ function MainLayout() {
         {activeView === "movies" && <Movies />}
         {activeView === "music" && <Music />}
         {activeView === "livetv" && <LiveTV />}
+        {activeView === "radio" && <Radio />}
+        {activeView === "radioguide" && <RadioGuide />}
         {activeView === "settings" && <Settings />}
         {activeView === "search" && <SearchResults />}
       </main>
 
       {/* Persistent Mini Audio Playbar */}
       <MusicPlayer />
+
+      {/* Persistent Headless Radio Audio Tag */}
+      <RadioAudioEngine />
+
+      {/* Persistent Mini Radio Playbar */}
+      <RadioPlayer />
 
       {/* Fullscreen Cinematic Video Player Overlay */}
       {currentVideo && <VideoPlayer movie={currentVideo} />}
