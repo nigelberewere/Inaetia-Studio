@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem } from "../types";
+import { safeFetch } from "../utils";
 
 export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search";
 
@@ -70,7 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const fetchProfiles = async () => {
     setLoadingProfiles(true);
     try {
-      const res = await fetch("/api/profiles");
+      const res = await safeFetch("/api/profiles");
       if (res.ok) {
         const data = await res.json();
         setProfiles(data);
@@ -84,7 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Create a new profile
   const createProfile = async (name: string, color: string, avatar: string): Promise<Profile> => {
-    const res = await fetch("/api/profiles", {
+    const res = await safeFetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, color, avatar }),
@@ -99,7 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Delete a profile
   const deleteProfile = async (id: string) => {
-    const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+    const res = await safeFetch(`/api/profiles/${id}`, { method: "DELETE" });
     if (!res.ok) {
       throw new Error("Failed to delete profile");
     }
@@ -112,7 +113,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Clear entire watch history
   const clearProfileHistory = async () => {
     if (!currentProfile) return;
-    const res = await fetch(`/api/profiles/${currentProfile.id}/history`, { method: "DELETE" });
+    const res = await safeFetch(`/api/profiles/${currentProfile.id}/history`, { method: "DELETE" });
     if (!res.ok) {
       throw new Error("Failed to clear watch history");
     }
@@ -131,7 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await fetch(`/api/profiles/${currentProfile.id}/continue`);
+      const res = await safeFetch(`/api/profiles/${currentProfile.id}/continue`);
       if (res.ok) {
         const data = await res.json();
         setContinueWatching(data);
@@ -171,7 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/movies");
+      const res = await safeFetch("/api/movies");
       if (!res.ok) throw new Error("Failed to load movies");
       const data = await res.json();
       setMovies(data);
@@ -189,7 +190,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/music");
+      const res = await safeFetch("/api/music");
       if (!res.ok) throw new Error("Failed to load music");
       const data = await res.json();
       setMusic(data);
@@ -213,8 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(null);
       try {
         const [moviesRes, musicRes] = await Promise.all([
-          fetch("/api/movies"),
-          fetch("/api/music"),
+          safeFetch("/api/movies"),
+          safeFetch("/api/music"),
         ]);
         if (moviesRes.ok) setMovies(await moviesRes.json());
         if (musicRes.ok) setMusic(await musicRes.json());
@@ -231,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fetch status
   const fetchStatus = async () => {
     try {
-      const res = await fetch("/api/status");
+      const res = await safeFetch("/api/status");
       if (res.ok) {
         const data = await res.json();
         setStatus(data);
@@ -245,7 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const triggerRescan = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/rescan", { method: "POST" });
+      const res = await safeFetch("/api/rescan", { method: "POST" });
       if (res.ok) {
         await refreshLibrary();
         await fetchStatus();
@@ -271,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsSearching(true);
     const delayDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+        const res = await safeFetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
         if (res.ok) {
           const data = await res.json();
           setSearchResults(data);

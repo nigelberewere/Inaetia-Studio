@@ -1,6 +1,7 @@
 import React, { Component, useState, useEffect, useRef, useMemo } from "react";
 import { Tv, Calendar, Play, ChevronUp, ChevronDown, Loader2, Clock, Volume2, VolumeX, AlertCircle } from "lucide-react";
 import { Channel, EPGItem } from "../types";
+import { safeFetch } from "../utils";
 
 // Safe time formatting helper to prevent RangeError crashes in sandboxed browser environments
 function formatTimeSafe(dateInput: any): string {
@@ -84,7 +85,7 @@ function LiveTVContent() {
   const fetchChannels = async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
-      const res = await fetch("/api/channels");
+      const res = await safeFetch("/api/channels");
       if (!res.ok) throw new Error("No channels found. Please ensure you have videos in your library subfolders.");
       const data = await res.json();
       setChannels(data);
@@ -316,6 +317,11 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
 
+  const streamUrl = useMemo(() => {
+    if (!nowPlaying?.currentProgram?.id) return "";
+    return `/api/channels/${channel.id}/stream?t=${nowPlaying.currentProgram.id}`;
+  }, [channel.id, nowPlaying?.currentProgram?.id]);
+
   const fetchLiveInfo = async () => {
     const now = Date.now();
     if (now - lastFetchTimeRef.current < 4000) {
@@ -326,7 +332,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
 
     try {
       setError(null);
-      const res = await fetch(`/api/channels/${channel.id}/now`);
+      const res = await safeFetch(`/api/channels/${channel.id}/now`);
       if (res.ok) {
         const data = await res.json();
         setNowPlaying(data);
@@ -491,11 +497,6 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
     );
   }
 
-  const streamUrl = useMemo(() => {
-    if (!nowPlaying?.currentProgram?.id) return "";
-    return `/api/channels/${channel.id}/stream?t=${nowPlaying.currentProgram.id}`;
-  }, [channel.id, nowPlaying?.currentProgram?.id]);
-
   return (
     <div className="space-y-4">
       {/* Header Info */}
@@ -632,7 +633,7 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
     const fetchEPG = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/channels/epg/all?hours=8");
+        const res = await safeFetch("/api/channels/epg/all?hours=8");
         if (res.ok) {
           const data = await res.json();
           setEpgData(data);

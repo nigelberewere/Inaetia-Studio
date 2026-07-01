@@ -7,6 +7,15 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 
+// Global process error catch guards to prevent crashing
+process.on("uncaughtException", (err) => {
+  console.error("🔥 Uncaught Exception caught:", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔥 Unhandled Rejection at promise:", promise, "reason:", reason);
+});
+
 dotenv.config();
 
 const DEMO_MODE = process.env.DEMO_MODE === "true";
@@ -724,7 +733,9 @@ async function checkCache() {
 // ==========================================
 // PROFILE SYSTEM ENDPOINTS
 // ==========================================
-const PROFILES_PATH = "/home/nigel/.nigelcloud/profiles.json";
+const PROFILES_PATH = fs.existsSync("/home/nigel") 
+  ? "/home/nigel/.nigelcloud/profiles.json" 
+  : path.join(process.cwd(), ".nigelcloud/profiles.json");
 
 function loadProfiles() {
   try {

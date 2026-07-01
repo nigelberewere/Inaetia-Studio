@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
+import { safeFetch } from "../utils";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
   Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image
@@ -68,7 +69,7 @@ export default function Settings() {
     setConfirmClearThumbs(false);
     setThumbsClearedMessage("");
     try {
-      const res = await fetch("/api/thumbnails/clear", { method: "POST" });
+      const res = await safeFetch("/api/thumbnails/clear", { method: "POST" });
       if (res.ok) {
         setThumbsClearedMessage("Cleared! New smart thumbnails will generate as you browse.");
         setTimeout(() => setThumbsClearedMessage(""), 5000);

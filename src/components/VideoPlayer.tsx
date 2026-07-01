@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
+import { safeFetch } from "../utils";
 import { 
   Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, 
   RotateCcw, RotateCw, X, Loader2, FastForward, AlertCircle, Clock,
@@ -175,7 +176,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
 
     const fetchSavedPosition = async () => {
       try {
-        const res = await fetch(`/api/profiles/${currentProfile.id}/history`);
+        const res = await safeFetch(`/api/profiles/${currentProfile.id}/history`);
         if (res.ok) {
           const history = await res.json();
           const savedRecord = history.find((h: any) => h.movieId === movie.id);
@@ -297,7 +298,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
     if (!videoDuration) return;
 
     try {
-      await fetch(`/api/profiles/${currentProfile.id}/history`, {
+      await safeFetch(`/api/profiles/${currentProfile.id}/history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
