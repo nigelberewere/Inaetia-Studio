@@ -31,38 +31,95 @@ app.use((req, res, next) => {
   next();
 });
 
-// Configure media folders with safe fallbacks
-const VIDEOS_PATH = process.env.VIDEOS_PATH || "/mnt/storage/Videos";
-const MUSIC_PATH = process.env.MUSIC_PATH || "/mnt/storage/Music";
-const PICTURES_PATH = process.env.PICTURES_PATH || "/mnt/storage/Pictures";
+import os from "os";
+
+// Helper to resolve ~ in paths
+function resolveHome(filepath: string): string {
+  if (!filepath) return "";
+  if (filepath.startsWith("~")) {
+    return path.join(os.homedir(), filepath.slice(1));
+  }
+  return filepath;
+}
+
+// Configure media folders with safe fallbacks (using let so setup wizard can reload dynamically)
+let VIDEOS_PATH = process.env.VIDEOS_PATH || "";
+let MUSIC_PATH = process.env.MUSIC_PATH || "";
+let MUSIC_VIDEOS_PATH = process.env.MUSIC_VIDEOS_PATH || "";
+let PICTURES_PATH = process.env.PICTURES_PATH || "";
+let THUMBNAILS_CACHE_PATH = process.env.THUMBNAILS_CACHE_PATH || "/tmp/inaetia/thumbs";
+let PROFILES_DIR = resolveHome(process.env.PROFILES_PATH || "~/.inaetia/profiles");
+let PROFILES_PATH = path.join(PROFILES_DIR, "profiles.json");
+
+let targetVideosDir = VIDEOS_PATH && fs.existsSync(resolveHome(VIDEOS_PATH)) ? resolveHome(VIDEOS_PATH) : path.join(process.cwd(), "media/Videos");
+let targetMusicDir = MUSIC_PATH && fs.existsSync(resolveHome(MUSIC_PATH)) ? resolveHome(MUSIC_PATH) : path.join(process.cwd(), "media/Music");
+let targetMusicVideosDir = MUSIC_VIDEOS_PATH && fs.existsSync(resolveHome(MUSIC_VIDEOS_PATH)) ? resolveHome(MUSIC_VIDEOS_PATH) : undefined;
+let targetPicturesDir = PICTURES_PATH && fs.existsSync(resolveHome(PICTURES_PATH)) ? resolveHome(PICTURES_PATH) : path.join(process.cwd(), "media/Pictures");
+let thumbsCacheDir = resolveHome(THUMBNAILS_CACHE_PATH);
+
+let MAX_CONCURRENT_FFPROBES = parseInt(process.env.MAX_CONCURRENT_FFPROBE || "3", 10);
+let RESCAN_INTERVAL_MINUTES = parseInt(process.env.RESCAN_INTERVAL_MINUTES || "30", 10);
+let RESCAN_INTERVAL_MS = RESCAN_INTERVAL_MINUTES * 60 * 1000;
+
+function reinitializePathsAndSettings() {
+  VIDEOS_PATH = process.env.VIDEOS_PATH || "";
+  MUSIC_PATH = process.env.MUSIC_PATH || "";
+  MUSIC_VIDEOS_PATH = process.env.MUSIC_VIDEOS_PATH || "";
+  PICTURES_PATH = process.env.PICTURES_PATH || "";
+  THUMBNAILS_CACHE_PATH = process.env.THUMBNAILS_CACHE_PATH || "/tmp/inaetia/thumbs";
+  PROFILES_DIR = resolveHome(process.env.PROFILES_PATH || "~/.inaetia/profiles");
+  PROFILES_PATH = path.join(PROFILES_DIR, "profiles.json");
+
+  targetVideosDir = VIDEOS_PATH && fs.existsSync(resolveHome(VIDEOS_PATH)) ? resolveHome(VIDEOS_PATH) : path.join(process.cwd(), "media/Videos");
+  targetMusicDir = MUSIC_PATH && fs.existsSync(resolveHome(MUSIC_PATH)) ? resolveHome(MUSIC_PATH) : path.join(process.cwd(), "media/Music");
+  targetMusicVideosDir = MUSIC_VIDEOS_PATH && fs.existsSync(resolveHome(MUSIC_VIDEOS_PATH)) ? resolveHome(MUSIC_VIDEOS_PATH) : undefined;
+  targetPicturesDir = PICTURES_PATH && fs.existsSync(resolveHome(PICTURES_PATH)) ? resolveHome(PICTURES_PATH) : path.join(process.cwd(), "media/Pictures");
+  thumbsCacheDir = resolveHome(THUMBNAILS_CACHE_PATH);
+
+  MAX_CONCURRENT_FFPROBES = parseInt(process.env.MAX_CONCURRENT_FFPROBE || "3", 10);
+  RESCAN_INTERVAL_MINUTES = parseInt(process.env.RESCAN_INTERVAL_MINUTES || "30", 10);
+  RESCAN_INTERVAL_MS = RESCAN_INTERVAL_MINUTES * 60 * 1000;
+
+  ensureDirs();
+  console.log("♻️  Reinitialized server directories and settings perfectly.");
+}
 
 // Validate Environment Variables and Path Existence
 const requiredPaths = { VIDEOS_PATH, MUSIC_PATH };
 Object.entries(requiredPaths).forEach(([key, val]) => {
   if (!val) {
     console.warn(`⚠️  WARNING: ${key} environment variable is not defined.`);
-  } else if (!fs.existsSync(val)) {
+  } else if (!fs.existsSync(resolveHome(val))) {
     console.warn(`⚠️  WARNING: ${key} points to a non-existent path: "${val}". Please check your drive mounting and server configuration.`);
   } else {
     console.log(`✅ ${key} is valid and exists: "${val}"`);
   }
 });
 
-// Determine which folders to scan. Use workspace fallbacks if system mount is unavailable.
-const targetVideosDir = fs.existsSync(VIDEOS_PATH) ? VIDEOS_PATH : path.join(process.cwd(), "media/Videos");
-const targetMusicDir = fs.existsSync(MUSIC_PATH) ? MUSIC_PATH : path.join(process.cwd(), "media/Music");
-const targetPicturesDir = fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures");
-
 const hasMntStorage = fs.existsSync("/mnt/storage");
-
-const thumbsCacheDir = "/tmp/nigelcloud/thumbs";
 
 // Ensure folders exist
 function ensureDirs() {
-  [targetVideosDir, targetMusicDir, targetPicturesDir, thumbsCacheDir].forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
+  const dirs = [
+    targetVideosDir, 
+    targetMusicDir, 
+    thumbsCacheDir, 
+    PROFILES_DIR
+  ];
+  if (targetMusicVideosDir) {
+    dirs.push(targetMusicVideosDir);
+  }
+  if (targetPicturesDir) {
+    dirs.push(targetPicturesDir);
+  }
+  dirs.forEach((dir) => {
+    if (dir && !fs.existsSync(dir)) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`Created directory: ${dir}`);
+      } catch (err: any) {
+        console.error(`Failed to create directory ${dir}:`, err.message);
+      }
     }
   });
 }
@@ -253,7 +310,6 @@ interface FfprobeTask {
 
 const ffprobeQueue: FfprobeTask[] = [];
 let activeFfprobes = 0;
-const MAX_CONCURRENT_FFPROBES = 3;
 
 function processFfprobeQueue() {
   if (activeFfprobes >= MAX_CONCURRENT_FFPROBES || ffprobeQueue.length === 0) {
@@ -597,8 +653,6 @@ async function triggerScan(): Promise<void> {
 }
 
 // Configurable background rescan interval (default 30 minutes)
-const RESCAN_INTERVAL_MINUTES = parseInt(process.env.RESCAN_INTERVAL_MINUTES || "30", 10);
-const RESCAN_INTERVAL_MS = RESCAN_INTERVAL_MINUTES * 60 * 1000;
 console.log(`⏰ Periodic background rescan interval set to ${RESCAN_INTERVAL_MINUTES} minutes.`);
 
 // Auto scan on startup
@@ -634,9 +688,6 @@ async function checkCache() {
 // ==========================================
 // PROFILE SYSTEM ENDPOINTS
 // ==========================================
-const PROFILES_PATH = fs.existsSync("/home/nigel") 
-  ? "/home/nigel/.nigelcloud/profiles.json" 
-  : path.join(process.cwd(), ".nigelcloud/profiles.json");
 
 function loadProfiles() {
   try {
@@ -2054,11 +2105,22 @@ app.get("/api/status", async (req, res) => {
         }
       }
 
+      const platform = process.platform;
+      let osName = "Linux";
+      if (platform === "darwin") osName = "macOS";
+      else if (platform === "win32") osName = "Windows";
+
       res.json({
         uptime: Math.round(process.uptime()),
         storage: { total, used, free },
         movies: moviesCache.length,
         music: musicCache.length,
+        os: osName,
+        serverIp: getServerIpAddress(),
+        videosPath: VIDEOS_PATH || "media/Videos",
+        musicPath: MUSIC_PATH || "media/Music",
+        appName: process.env.APP_NAME || "Inaetia Studios",
+        port: PORT,
       });
     });
   } catch (err: any) {
@@ -2092,6 +2154,146 @@ app.post("/api/thumbnails/clear", async (req, res) => {
     res.json({ success: true, message: "Thumbnail cache cleared successfully" });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to clear thumbnail cache", details: err.message });
+  }
+});
+
+// ==========================================
+// SETUP WIZARD API ENDPOINTS
+// ==========================================
+
+let ffmpegInstalledCached = false;
+exec("ffmpeg -version", (err) => {
+  if (!err) {
+    ffmpegInstalledCached = true;
+  } else {
+    ffmpegInstalledCached = fs.existsSync("/usr/bin/ffmpeg") || fs.existsSync("/usr/local/bin/ffmpeg");
+  }
+});
+
+function getServerIpAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const net of interfaces[name] || []) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "localhost";
+}
+
+app.get("/api/setup/status", (req, res) => {
+  const setupComplete = process.env.SETUP_COMPLETE === "true";
+  
+  const platform = process.platform;
+  let osName = "Unknown";
+  if (platform === "linux") osName = "Linux";
+  else if (platform === "darwin") osName = "macOS";
+  else if (platform === "win32") osName = "Windows";
+  
+  res.json({
+    setupComplete,
+    os: osName,
+    nodeVersion: process.version,
+    ffmpegDetected: ffmpegInstalledCached,
+    themeColor: process.env.THEME_COLOR || "#F5A623",
+    appName: process.env.APP_NAME || "Inaetia Studios",
+    videosPath: process.env.VIDEOS_PATH || "",
+    musicPath: process.env.MUSIC_PATH || "",
+    musicVideosPath: process.env.MUSIC_VIDEOS_PATH || "",
+    serverIp: getServerIpAddress(),
+  });
+});
+
+app.post("/api/setup/validate-path", (req, res) => {
+  const { path: rawPath, type } = req.body;
+  if (!rawPath) {
+    return res.status(400).json({ error: "Path is required" });
+  }
+
+  const resolvedPath = resolveHome(rawPath);
+  if (!fs.existsSync(resolvedPath)) {
+    return res.json({ exists: false, fileCount: 0 });
+  }
+
+  const allowedExts = type === "music" 
+    ? [".mp3", ".flac", ".m4a", ".wav", ".ogg", ".aac"]
+    : [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
+    
+  const files = getFilesRecursively(resolvedPath, allowedExts);
+  res.json({ exists: true, fileCount: files.length });
+});
+
+app.post("/api/setup/submit", async (req, res) => {
+  const { 
+    videosPath, 
+    musicPath, 
+    musicVideosPath, 
+    performanceProfile, 
+    themeColor,
+    appName 
+  } = req.body;
+
+  if (!videosPath || !musicPath) {
+    return res.status(400).json({ error: "Videos and Music paths are required" });
+  }
+
+  let maxConcurrentFfprobe = 5;
+  let rescanInterval = 30;
+  if (performanceProfile === "low") {
+    maxConcurrentFfprobe = 2;
+    rescanInterval = 60;
+  } else if (performanceProfile === "mid") {
+    maxConcurrentFfprobe = 5;
+    rescanInterval = 30;
+  } else if (performanceProfile === "high") {
+    maxConcurrentFfprobe = 10;
+    rescanInterval = 15;
+  }
+
+  const envContent = `# Inaetia Studios - Self-Hosted Media Server Configuration
+SETUP_COMPLETE=true
+APP_NAME="${appName || "Inaetia Studios"}"
+PORT=${process.env.PORT || 3000}
+HOST=${process.env.HOST || "0.0.0.0"}
+VIDEOS_PATH="${videosPath}"
+MUSIC_PATH="${musicPath}"
+MUSIC_VIDEOS_PATH="${musicVideosPath || ""}"
+THUMBNAILS_CACHE_PATH="/tmp/inaetia/thumbs"
+PROFILES_PATH="~/.inaetia/profiles"
+MAX_CONCURRENT_FFPROBE=${maxConcurrentFfprobe}
+RESCAN_INTERVAL_MINUTES=${rescanInterval}
+ENABLE_LIVE_TV=true
+ENABLE_RADIO=true
+ENABLE_SAFARI_REMUX=true
+THEME_COLOR="${themeColor || "#F5A623"}"
+SERVER_IP="${getServerIpAddress()}"
+`;
+
+  try {
+    fs.writeFileSync(path.join(process.cwd(), ".env"), envContent, "utf-8");
+    console.log("📝 .env file written successfully!");
+
+    process.env.SETUP_COMPLETE = "true";
+    process.env.APP_NAME = appName || "Inaetia Studios";
+    process.env.VIDEOS_PATH = videosPath;
+    process.env.MUSIC_PATH = musicPath;
+    process.env.MUSIC_VIDEOS_PATH = musicVideosPath || "";
+    process.env.THUMBNAILS_CACHE_PATH = "/tmp/inaetia/thumbs";
+    process.env.PROFILES_PATH = "~/.inaetia/profiles";
+    process.env.MAX_CONCURRENT_FFPROBE = maxConcurrentFfprobe.toString();
+    process.env.RESCAN_INTERVAL_MINUTES = rescanInterval.toString();
+    process.env.THEME_COLOR = themeColor || "#F5A623";
+
+    reinitializePathsAndSettings();
+
+    // Trigger scan asynchronously in background
+    triggerScan().catch(console.error);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Failed to write setup config:", err);
+    res.status(500).json({ error: "Failed to save configuration", details: err.message });
   }
 });
 

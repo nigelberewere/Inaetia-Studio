@@ -96,7 +96,7 @@ export default function Settings() {
           Server Configuration
         </h1>
         <p className="text-cinema-muted text-xs md:text-sm mt-1">
-          Monitor your Ubuntu Server media assets, disk spaces, and local network hotspot health.
+          Monitor your {status?.appName || "Inaetia Studios"} media assets, disk spaces, and local network hotspot health.
         </p>
       </div>
 
@@ -125,8 +125,10 @@ export default function Settings() {
 
           <div className="grid grid-cols-3 gap-4 border-t border-cinema-border pt-5 text-center">
             <div>
-              <p className="text-[10px] uppercase font-bold text-cinema-muted tracking-wider">Mount Directory</p>
-              <p className="text-xs font-semibold text-white mt-1 font-mono truncate">/mnt/storage</p>
+              <p className="text-[10px] uppercase font-bold text-cinema-muted tracking-wider">Videos Path</p>
+              <p className="text-xs font-semibold text-white mt-1 font-mono truncate" title={status?.videosPath || "/media/Videos"}>
+                {status?.videosPath || "/media/Videos"}
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase font-bold text-cinema-muted tracking-wider">Total capacity</p>
@@ -134,7 +136,9 @@ export default function Settings() {
             </div>
             <div>
               <p className="text-[10px] uppercase font-bold text-cinema-muted tracking-wider">Storage device</p>
-              <p className="text-xs font-semibold text-white mt-1 font-mono truncate">SATA HDD /dev/sdb1</p>
+              <p className="text-xs font-semibold text-white mt-1 font-mono truncate">
+                {status?.os === "Windows" ? "Local C:\\ Drive" : "System Storage Partition"}
+              </p>
             </div>
           </div>
         </div>
@@ -150,15 +154,17 @@ export default function Settings() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-cinema-border">
                 <span className="text-cinema-muted">Server Host IP:</span>
-                <span className="text-white font-mono font-bold">192.168.4.1</span>
+                <span className="text-white font-mono font-bold">
+                  {status?.serverIp || window.location.hostname}
+                </span>
               </div>
               <div className="flex justify-between py-1 border-b border-cinema-border">
                 <span className="text-cinema-muted">Server OS:</span>
-                <span className="text-white font-mono">Ubuntu 23.04</span>
+                <span className="text-white font-mono">{status?.os || "Linux"}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-cinema-border">
                 <span className="text-cinema-muted">Server Port:</span>
-                <span className="text-white font-mono">3000</span>
+                <span className="text-white font-mono">{status?.port || 3000}</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-cinema-muted">Server Uptime:</span>
@@ -239,17 +245,17 @@ export default function Settings() {
         <div className="bg-cinema-card border border-cinema-border rounded-2xl p-6 shadow-xl flex flex-col justify-between">
           <div>
             <h3 className="font-bold text-white text-sm uppercase tracking-wider border-b border-cinema-border pb-2 flex items-center gap-1.5">
-              <Wifi className="w-4 h-4 text-cinema-amber" /> Offline Hotspot Access Guide
+              <Wifi className="w-4 h-4 text-cinema-amber" /> Local Offline Access Guide
             </h3>
             <p className="text-xs text-cinema-muted mt-3 leading-relaxed">
-              This streaming app operates strictly inside your private home router WiFi local loop. No data leaves your home, and no external internet access is required.
+              This streaming app operates strictly inside your private local network router loop. No data leaves your home, and no external internet access is required.
             </p>
           </div>
 
           <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-3 mt-4 text-[11px] font-mono space-y-1.5 text-cinema-muted">
-            <p>📡 <span className="text-white font-semibold">SSID:</span> Inaetia Studios WiFi</p>
-            <p>🔗 <span className="text-white font-semibold">Address:</span> http://192.168.4.1:3000</p>
-            <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPhone Safari, Android Chrome, Samsung TV</p>
+            <p>📡 <span className="text-white font-semibold">Server Name:</span> {status?.appName || "Inaetia Studios"}</p>
+            <p>🔗 <span className="text-white font-semibold">Address:</span> http://{status?.serverIp || window.location.hostname}:{status?.port || 3000}</p>
+            <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPad/iPhone Safari, Android Chrome, Smart TV</p>
           </div>
         </div>
       </div>

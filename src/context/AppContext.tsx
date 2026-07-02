@@ -67,6 +67,16 @@ interface AppContextType {
   clearProfileHistory: () => Promise<void>;
   continueWatching: WatchHistoryItem[];
   fetchContinueWatching: () => Promise<void>;
+
+  // Setup Wizard States
+  setupComplete: boolean;
+  setSetupComplete: (complete: boolean) => void;
+  themeColor: string;
+  setThemeColor: (color: string) => void;
+  appName: string;
+  setAppName: (name: string) => void;
+  setupLoading: boolean;
+  fetchSetupStatus: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -74,6 +84,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ViewType>("home");
   
+  // Setup Wizard States
+  const [setupComplete, setSetupComplete] = useState<boolean>(true);
+  const [themeColor, setThemeColor] = useState<string>("#F5A623");
+  const [appName, setAppName] = useState<string>("Inaetia Studios");
+  const [setupLoading, setSetupLoading] = useState<boolean>(true);
+
   // Profile system states
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -93,6 +109,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error("Error fetching profiles:", err);
     } finally {
       setLoadingProfiles(false);
+    }
+  };
+
+  const fetchSetupStatus = async () => {
+    setSetupLoading(true);
+    try {
+      const res = await safeFetch("/api/setup/status");
+      if (res.ok) {
+        const data = await res.json();
+        setSetupComplete(data.setupComplete);
+        setThemeColor(data.themeColor || "#F5A623");
+        setAppName(data.appName || "Inaetia Studios");
+      }
+    } catch (err) {
+      console.error("Error fetching setup status:", err);
+    } finally {
+      setSetupLoading(false);
     }
   };
 
@@ -420,6 +453,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Initial loads
   useEffect(() => {
+    fetchSetupStatus();
     fetchStatus();
     fetchProfiles();
   }, []);
@@ -490,6 +524,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearProfileHistory,
         continueWatching,
         fetchContinueWatching,
+        setupComplete,
+        setSetupComplete,
+        themeColor,
+        setThemeColor,
+        appName,
+        setAppName,
+        setupLoading,
+        fetchSetupStatus,
       }}
     >
       {children}

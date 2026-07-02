@@ -39,6 +39,12 @@ export interface ServerStatus {
   storage: StorageInfo;
   movies: number;
   music: number;
+  os?: string;
+  serverIp?: string;
+  videosPath?: string;
+  musicPath?: string;
+  appName?: string;
+  port?: number;
 }
 
 export interface SearchResults {

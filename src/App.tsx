@@ -14,16 +14,46 @@ import RadioPlayer from "./components/RadioPlayer";
 import RadioAudioEngine from "./components/RadioAudioEngine";
 import VideoPlayer from "./components/VideoPlayer";
 import WhosWatching from "./components/WhosWatching";
+import SetupWizard from "./components/SetupWizard";
 
 function MainLayout() {
-  const { activeView, currentVideo, currentProfile } = useApp();
+  const { 
+    activeView, 
+    currentVideo, 
+    currentProfile, 
+    setupComplete, 
+    setupLoading, 
+    themeColor 
+  } = useApp();
+
+  if (setupLoading) {
+    return (
+      <div className="min-h-screen bg-[#080810] text-cinema-text flex flex-col justify-center items-center font-sans">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-zinc-400"></div>
+        <p className="mt-4 text-[10px] font-mono tracking-widest text-zinc-500 uppercase animate-pulse">
+          Starting Inaetia Studios...
+        </p>
+      </div>
+    );
+  }
+
+  if (!setupComplete) {
+    return <SetupWizard />;
+  }
 
   if (!currentProfile) {
-    return <WhosWatching />;
+    return (
+      <div style={{ "--color-cinema-amber": themeColor } as any}>
+        <WhosWatching />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-cinema-bg text-cinema-text flex flex-col font-sans selection:bg-cinema-amber selection:text-cinema-bg">
+    <div 
+      className="min-h-screen bg-cinema-bg text-cinema-text flex flex-col font-sans selection:bg-cinema-amber selection:text-cinema-bg"
+      style={{ "--color-cinema-amber": themeColor } as any}
+    >
       {/* Navigation Header */}
       <Navbar />
 
