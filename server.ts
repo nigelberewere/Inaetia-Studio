@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { exec } from "child_process";
+import { exec, spawn } from "child_process";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -88,6 +88,36 @@ const musicIndex = new Map<string, string>();  // id -> full filepath
 const showsFoldersIndex = new Map<string, string>(); // showNameLower -> absolute folder path
 
 const METADATA_CACHE_FILE = path.join(process.cwd(), "media-cache.json");
+
+// Safari client and remuxing configuration
+let activeRemuxCount = 0;
+const MAX_REMUX_STREAMS = 2;
+
+function isSafariClient(userAgent: string): boolean {
+  if (!userAgent) return false;
+  // All iOS/iPadOS browsers use WebKit
+  // Safari on macOS also needs this
+  return (
+    (userAgent.includes("Safari") && 
+     !userAgent.includes("Chrome") && 
+     !userAgent.includes("Chromium")) || 
+    userAgent.includes("iPhone") || 
+    userAgent.includes("iPad") ||
+    userAgent.includes("iPod")
+  );
+}
+
+function needsRemux(filepath: string): boolean {
+  const ext = path.extname(filepath).toLowerCase();
+  const safariCompatible = [".mp4", ".m4v", ".mov"];
+  return !safariCompatible.includes(ext);
+}
+
+function needsMusicTranscode(filepath: string): boolean {
+  const ext = path.extname(filepath).toLowerCase();
+  const safariMusicCompatible = [".mp3", ".m4a", ".aac", ".wav"];
+  return !safariMusicCompatible.includes(ext);
+}
 
 function findShowFolderPath(file: string, showName: string): string | null {
   const normalizedPath = file.replace(/\\/g, "/");
@@ -895,6 +925,81 @@ app.get("/api/stream/:id", (req, res) => {
     return res.status(404).json({ error: "Movie ID not found or catalog unindexed" });
   }
 
+  const userAgent = req.headers["user-agent"] || "";
+
+  if (isSafariClient(userAgent) && needsRemux(filepath)) {
+    console.log(`[REMUX] Safari client detected, remuxing ${path.basename(filepath)} for ${req.ip}`);
+    console.log(`[REMUX] Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+
+    if (activeRemuxCount >= MAX_REMUX_STREAMS) {
+      return res.status(503).json({ 
+        error: "Server busy, too many streams active. Try again shortly." 
+      });
+    }
+
+    // Serve remuxed MP4 stream
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    activeRemuxCount++;
+
+    // Optional Seeking support using -ss
+    let startSeconds = 0;
+    const movie = moviesCache.find((m) => m.id === id);
+    if (req.headers.range && movie && movie.duration && movie.size && movie.size > 0) {
+      const parts = req.headers.range.replace(/bytes=/, "").split("-");
+      const startByte = parseInt(parts[0], 10);
+      if (!isNaN(startByte) && startByte > 500000) {
+        const ratio = startByte / movie.size;
+        startSeconds = Math.floor(ratio * movie.duration);
+        console.log(`[REMUX] Range request received: ${req.headers.range}. Seeking to ${startSeconds}s (Ratio: ${(ratio * 100).toFixed(1)}%)`);
+      }
+    }
+
+    const ffmpegArgs: string[] = [];
+    if (startSeconds > 0) {
+      ffmpegArgs.push("-ss", startSeconds.toString());
+    }
+    ffmpegArgs.push(
+      "-i", filepath,        // input file
+      "-c:v", "copy",        // copy video stream (no re-encode)
+      "-c:a", "aac",         // convert audio to AAC (Safari compatible)
+      "-b:a", "192k",        // audio bitrate
+      "-movflags", "frag_keyframe+empty_moov+faststart",
+      "-f", "mp4",           // output format
+      "pipe:1"               // output to stdout
+    );
+
+    const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
+
+    ffmpegProcess.stdout.pipe(res);
+
+    let countDecremented = false;
+    const decrementCount = () => {
+      if (!countDecremented) {
+        activeRemuxCount = Math.max(0, activeRemuxCount - 1);
+        countDecremented = true;
+        console.log(`[REMUX] Stream closed. Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+      }
+    };
+
+    ffmpegProcess.on("close", decrementCount);
+    ffmpegProcess.on("error", (err) => {
+      console.error("ffmpeg remux error:", err);
+      decrementCount();
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Remux failed" });
+      }
+    });
+
+    req.on("close", () => {
+      ffmpegProcess.kill("SIGKILL");
+      decrementCount();
+    });
+
+    return; // Don't fall through to normal range-request handler
+  }
+
   const mimeType = getMimeType(path.extname(filepath));
   streamMediaFile(filepath, mimeType, req, res);
 });
@@ -1076,6 +1181,62 @@ app.get("/api/music/stream/:id", (req, res) => {
 
   if (!filepath) {
     return res.status(404).json({ error: "Audio track ID not found" });
+  }
+
+  const userAgent = req.headers["user-agent"] || "";
+
+  if (isSafariClient(userAgent) && needsMusicTranscode(filepath)) {
+    console.log(`[REMUX/TRANSCODE] Safari Music client, transcoding ${path.basename(filepath)} to AAC`);
+    console.log(`[REMUX] Active streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+
+    if (activeRemuxCount >= MAX_REMUX_STREAMS) {
+      return res.status(503).json({ 
+        error: "Server busy, too many streams active. Try again shortly." 
+      });
+    }
+
+    // Serve AAC audio stream
+    res.setHeader("Content-Type", "audio/aac");
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    activeRemuxCount++;
+
+    const ffmpegArgs = [
+      "-i", filepath,
+      "-c:a", "aac",
+      "-b:a", "256k",
+      "-f", "adts",
+      "pipe:1"
+    ];
+
+    const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
+
+    ffmpegProcess.stdout.pipe(res);
+
+    let countDecremented = false;
+    const decrementCount = () => {
+      if (!countDecremented) {
+        activeRemuxCount = Math.max(0, activeRemuxCount - 1);
+        countDecremented = true;
+        console.log(`[REMUX] Music transcode closed. Active streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+      }
+    };
+
+    ffmpegProcess.on("close", decrementCount);
+    ffmpegProcess.on("error", (err) => {
+      console.error("ffmpeg music transcode error:", err);
+      decrementCount();
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Transcode failed" });
+      }
+    });
+
+    req.on("close", () => {
+      ffmpegProcess.kill("SIGKILL");
+      decrementCount();
+    });
+
+    return;
   }
 
   const mimeType = getMimeType(path.extname(filepath));
@@ -1358,6 +1519,71 @@ app.get("/api/channels/:id/stream", async (req, res) => {
     const filepath = moviesIndex.get(live.currentProgram.id);
     if (!filepath) {
       return res.status(404).json({ error: "Source file not found for the active broadcast" });
+    }
+
+    const userAgent = req.headers["user-agent"] || "";
+
+    if (isSafariClient(userAgent) && needsRemux(filepath)) {
+      console.log(`[REMUX] Live TV Safari client, remuxing ${path.basename(filepath)} at offset ${live.offsetSeconds}s`);
+      console.log(`[REMUX] Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+
+      if (activeRemuxCount >= MAX_REMUX_STREAMS) {
+        return res.status(503).json({ 
+          error: "Server busy, too many streams active. Try again shortly." 
+        });
+      }
+
+      // Serve remuxed MP4 stream
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      activeRemuxCount++;
+
+      // Use offsetSeconds to seek on the server so Safari is perfectly in-sync!
+      const startSeconds = Math.max(0, Math.floor(live.offsetSeconds || 0));
+
+      const ffmpegArgs: string[] = [];
+      if (startSeconds > 0) {
+        ffmpegArgs.push("-ss", startSeconds.toString());
+      }
+      ffmpegArgs.push(
+        "-i", filepath,        // input file
+        "-c:v", "copy",        // copy video stream (no re-encode)
+        "-c:a", "aac",         // convert audio to AAC (Safari compatible)
+        "-b:a", "192k",        // audio bitrate
+        "-movflags", "frag_keyframe+empty_moov+faststart",
+        "-f", "mp4",           // output format
+        "pipe:1"               // output to stdout
+      );
+
+      const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
+
+      ffmpegProcess.stdout.pipe(res);
+
+      let countDecremented = false;
+      const decrementCount = () => {
+        if (!countDecremented) {
+          activeRemuxCount = Math.max(0, activeRemuxCount - 1);
+          countDecremented = true;
+          console.log(`[REMUX] Live TV Stream closed. Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+        }
+      };
+
+      ffmpegProcess.on("close", decrementCount);
+      ffmpegProcess.on("error", (err) => {
+        console.error("ffmpeg Live TV remux error:", err);
+        decrementCount();
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Live TV Remux failed" });
+        }
+      });
+
+      req.on("close", () => {
+        ffmpegProcess.kill("SIGKILL");
+        decrementCount();
+      });
+
+      return;
     }
 
     const mimeType = getMimeType(path.extname(filepath));
@@ -1694,6 +1920,69 @@ app.get("/api/radio/stations/:id/stream", async (req, res) => {
     const filepath = musicIndex.get(live.currentTrack.id);
     if (!filepath) {
       return res.status(404).json({ error: "Source file not found for the active radio track" });
+    }
+
+    const userAgent = req.headers["user-agent"] || "";
+
+    if (isSafariClient(userAgent) && needsMusicTranscode(filepath)) {
+      console.log(`[REMUX/TRANSCODE] Live Radio Safari client, transcoding ${path.basename(filepath)} to AAC`);
+      console.log(`[REMUX] Active streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+
+      if (activeRemuxCount >= MAX_REMUX_STREAMS) {
+        return res.status(503).json({ 
+          error: "Server busy, too many streams active. Try again shortly." 
+        });
+      }
+
+      // Serve AAC audio stream
+      res.setHeader("Content-Type", "audio/aac");
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      activeRemuxCount++;
+
+      // Use offsetSeconds to seek on the server
+      const startSeconds = Math.max(0, Math.floor(live.offsetSeconds || 0));
+
+      const ffmpegArgs: string[] = [];
+      if (startSeconds > 0) {
+        ffmpegArgs.push("-ss", startSeconds.toString());
+      }
+      ffmpegArgs.push(
+        "-i", filepath,
+        "-c:a", "aac",
+        "-b:a", "256k",
+        "-f", "adts",
+        "pipe:1"
+      );
+
+      const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
+
+      ffmpegProcess.stdout.pipe(res);
+
+      let countDecremented = false;
+      const decrementCount = () => {
+        if (!countDecremented) {
+          activeRemuxCount = Math.max(0, activeRemuxCount - 1);
+          countDecremented = true;
+          console.log(`[REMUX] Radio transcode closed. Active streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+        }
+      };
+
+      ffmpegProcess.on("close", decrementCount);
+      ffmpegProcess.on("error", (err) => {
+        console.error("ffmpeg radio transcode error:", err);
+        decrementCount();
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Radio Transcode failed" });
+        }
+      });
+
+      req.on("close", () => {
+        ffmpegProcess.kill("SIGKILL");
+        decrementCount();
+      });
+
+      return;
     }
 
     const mimeType = getMimeType(path.extname(filepath));

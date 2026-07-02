@@ -88,8 +88,8 @@ export default function Music() {
 
       {/* Main Music Browser Board */}
       <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* Left Side: Artists list rail */}
-        <div className="w-full md:w-1/4 bg-cinema-card border border-cinema-border rounded-2xl overflow-hidden shadow-xl shrink-0">
+        {/* Left Side: Artists list rail (Desktop) */}
+        <div className="w-full md:w-1/4 bg-cinema-card border border-cinema-border rounded-2xl overflow-hidden shadow-xl shrink-0 hidden md:block">
           <div className="p-4 border-b border-cinema-border bg-white/[0.02] flex items-center gap-2">
             <User className="w-4 h-4 text-cinema-amber" />
             <span className="font-bold text-xs uppercase tracking-wider text-white">Artists</span>
@@ -106,7 +106,7 @@ export default function Music() {
                 <button
                   key={artist}
                   onClick={() => setSelectedArtist(artist)}
-                  className={`w-full text-left px-4 py-3 flex.items-center justify-between text-xs font-semibold transition-all flex hover:bg-white/[0.02] ${
+                  className={`w-full text-left px-4 py-3 flex items-center justify-between text-xs font-semibold transition-all flex hover:bg-white/[0.02] ${
                     selectedArtist === artist 
                       ? "bg-cinema-amber/10 text-cinema-amber border-l-2 border-cinema-amber" 
                       : "text-cinema-text"
@@ -114,6 +114,42 @@ export default function Music() {
                 >
                   <span className="truncate pr-2 font-medium">{artist}</span>
                   <span className="px-1.5 py-0.5 bg-white/5 rounded text-[10px] text-cinema-muted font-bold shrink-0">
+                    {tracksCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Left Side: Artists list horizontal scroller (Mobile) */}
+        <div className="w-full md:hidden space-y-2">
+          <div className="flex items-center gap-2 text-cinema-muted text-xs font-bold px-1 uppercase tracking-wider">
+            <User className="w-3.5 h-3.5 text-cinema-amber" />
+            Select Artist ({artists.length})
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none horizontal-scroll">
+            {artists.map((artist) => {
+              let tracksCount = 0;
+              Object.values(groupedMusic[artist]).forEach((list: any) => {
+                tracksCount += list.length;
+              });
+              const isSelected = selectedArtist === artist;
+
+              return (
+                <button
+                  key={artist}
+                  onClick={() => setSelectedArtist(artist)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold shrink-0 active:scale-95 transition-all flex items-center gap-1.5 border ${
+                    isSelected
+                      ? "bg-cinema-amber text-cinema-bg border-cinema-amber shadow-lg shadow-cinema-amber/10"
+                      : "bg-cinema-card border-cinema-border text-cinema-text hover:text-white"
+                  }`}
+                >
+                  <span className="truncate max-w-[120px]">{artist}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                    isSelected ? "bg-black/20 text-cinema-amber" : "bg-white/5 text-cinema-muted"
+                  }`}>
                     {tracksCount}
                   </span>
                 </button>

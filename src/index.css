@@ -56,4 +56,16 @@ body {
   padding-bottom: 1rem;
   scrollbar-width: thin;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* iOS Momentum scrolling */
+}
+
+@media (max-width: 768px) {
+  .horizontal-scroll {
+    gap: 1rem;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .horizontal-scroll::-webkit-scrollbar {
+    display: none;
+  }
 }

@@ -75,11 +75,27 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
 
   // Detect format support
   const isFormatUnsupported = !movie.extension.toLowerCase().match(/\.(mp4|webm)$/);
-  const [showFormatWarning, setShowFormatWarning] = useState(isFormatUnsupported);
+  
+  // Detect Safari / iOS Safari WebKit environment
+  const isSafariOrIOS = React.useMemo(() => {
+    const ua = navigator.userAgent;
+    const isSafari = ua.includes("Safari") && !ua.includes("Chrome") && !ua.includes("Chromium");
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return isSafari || isIOS;
+  }, []);
+
+  const isNeedsRemux = React.useMemo(() => {
+    const extName = movie.extension.toLowerCase();
+    return ![".mp4", ".m4v", ".mov"].includes(extName);
+  }, [movie.id, movie.extension]);
+
+  const isRemuxedSafari = isSafariOrIOS && isNeedsRemux;
+
+  const [showFormatWarning, setShowFormatWarning] = useState(isFormatUnsupported && !isRemuxedSafari);
 
   useEffect(() => {
-    setShowFormatWarning(isFormatUnsupported);
-  }, [movie.id, isFormatUnsupported]);
+    setShowFormatWarning(isFormatUnsupported && !isRemuxedSafari);
+  }, [movie.id, isFormatUnsupported, isRemuxedSafari]);
 
   // Subtitle states
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(!!movie.hasSubtitles);
@@ -540,7 +556,15 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-xs text-cinema-muted tracking-wider uppercase font-medium">NOW STREAMING</span>
-            <span className="text-base md:text-lg font-bold text-white drop-shadow-sm">{movie.title}</span>
+            <span className="text-base md:text-lg font-bold text-white drop-shadow-sm flex items-center gap-2">
+              {movie.title}
+              {isRemuxedSafari && (
+                <span className="text-[10px] bg-cinema-amber/20 text-cinema-amber border border-cinema-amber/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cinema-amber animate-ping"></span>
+                  Safari Optimized
+                </span>
+              )}
+            </span>
           </div>
 
           <button 
@@ -556,23 +580,30 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
         {/* Bottom Control Box */}
         <div className="space-y-4">
           {/* Progress Timeline Row */}
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono text-cinema-muted w-12 text-right">
-              {formatTime(currentTime)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={0.1}
-              value={currentTime}
-              onChange={handleSeekChange}
-              className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer bg-white/20 accent-cinema-amber focus:outline-none"
-              title="Seek Timeline"
-            />
-            <span className="text-xs font-mono text-cinema-muted w-12 text-left">
-              {formatTime(duration)}
-            </span>
+          <div className="flex flex-col gap-1.5 w-full">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-mono text-cinema-muted w-12 text-right">
+                {formatTime(currentTime)}
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={duration || 100}
+                step={0.1}
+                value={currentTime}
+                onChange={handleSeekChange}
+                className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer bg-white/20 accent-cinema-amber focus:outline-none"
+                title="Seek Timeline"
+              />
+              <span className="text-xs font-mono text-cinema-muted w-12 text-left">
+                {formatTime(duration)}
+              </span>
+            </div>
+            {isRemuxedSafari && (
+              <div className="text-[10px] text-cinema-amber/80 font-mono font-medium text-center tracking-wider bg-cinema-amber/5 py-0.5 rounded border border-cinema-amber/10 w-fit mx-auto px-2">
+                ⚡ Real-time Remuxed Stream — seeking is approximate
+              </div>
+            )}
           </div>
 
           {/* Buttons and Settings Control Row */}

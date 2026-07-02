@@ -349,10 +349,10 @@ export default function Movies() {
       {/* Netflix-style TV Show Details Immersive Overlay Panel */}
       {selectedShow && showDetails && (
         <div 
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 md:p-6 animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in"
           id="tv-show-details-modal"
         >
-          <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh]">
             {/* Modal Header */}
             <div 
               style={{
@@ -360,26 +360,26 @@ export default function Movies() {
                 backgroundSize: "cover",
                 backgroundPosition: "center"
               }}
-              className="relative aspect-[21/9] w-full flex flex-col justify-end p-6 md:p-8 shrink-0 bg-zinc-900"
+              className="relative aspect-[16/9] sm:aspect-[21/9] w-full flex flex-col justify-end p-4 sm:p-6 md:p-8 shrink-0 bg-zinc-900"
             >
               {/* Close Button */}
               <button
                 onClick={() => setSelectedShow(null)}
-                className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-black/90 hover:text-cinema-amber text-white transition-all cursor-pointer"
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 sm:p-2.5 rounded-full bg-black/60 hover:bg-black/90 hover:text-cinema-amber text-white transition-all cursor-pointer"
                 title="Close Panel"
                 id="btn-close-show-details"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 sm:w-5 sm:h-5 h-4" />
               </button>
 
               <div className="space-y-1">
-                <span className="text-xs font-bold text-cinema-amber uppercase tracking-wider bg-cinema-amber/10 px-2.5 py-1 rounded-md border border-cinema-amber/20">
+                <span className="text-[10px] sm:text-xs font-bold text-cinema-amber uppercase tracking-wider bg-cinema-amber/10 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-cinema-amber/20">
                   TV Series
                 </span>
-                <h2 className="text-2xl md:text-4xl font-black text-white drop-shadow-md mt-2">
+                <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white drop-shadow-md mt-1.5 sm:mt-2">
                   {showDetails.name}
                 </h2>
-                <p className="text-xs md:text-sm text-cinema-muted">
+                <p className="text-[10px] sm:text-xs md:text-sm text-cinema-muted">
                   {showDetails.totalEpisodes} episodes available • Sorted sequentially
                 </p>
               </div>

@@ -535,6 +535,19 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
             src={streamUrl}
             onLoadedMetadata={handleVideoLoadedMetadata}
             onEnded={handleVideoEnded}
+            onPause={(e) => {
+              // Real-world Live TV cannot be paused! Force resume immediately.
+              const video = e.currentTarget;
+              video.play().catch((err) => {
+                console.warn("Autoplay block or live playback resume failed", err);
+              });
+            }}
+            onKeyDown={(e) => {
+              // Prevent Spacebar from pausing Live TV
+              if (e.key === " " || e.code === "Space") {
+                e.preventDefault();
+              }
+            }}
             className="w-full h-full object-contain"
             controls
             autoPlay
@@ -694,7 +707,7 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
         {/* Horizontal Timeline Header */}
         <div className="flex border-b border-cinema-border">
           {/* Left spacer block */}
-          <div className="w-48 bg-cinema-card-bg border-r border-cinema-border py-3 px-4 text-xs font-black text-gray-400 shrink-0 select-none">
+          <div className="w-32 sm:w-48 bg-cinema-card-bg border-r border-cinema-border py-3 px-2 sm:px-4 text-xs font-black text-gray-400 shrink-0 select-none">
             Channels
           </div>
           {/* Timeline Blocks */}
@@ -723,7 +736,7 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
                 {/* Channel Label Row */}
                 <div
                   onClick={() => onSelectChannel(ch)}
-                  className="w-48 bg-cinema-card-bg border-r border-cinema-border py-4 px-4 flex items-center gap-2.5 shrink-0 cursor-pointer hover:bg-white/5 transition-colors group select-none"
+                  className="w-32 sm:w-48 bg-cinema-card-bg border-r border-cinema-border py-4 px-2 sm:px-4 flex items-center gap-1.5 sm:gap-2.5 shrink-0 cursor-pointer hover:bg-white/5 transition-colors group select-none"
                 >
                   <div
                     className="h-6 w-8 rounded text-[10px] font-black text-white flex items-center justify-center shrink-0 shadow"

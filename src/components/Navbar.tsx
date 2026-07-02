@@ -60,7 +60,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-40 bg-cinema-bg/95 backdrop-blur-md border-b border-cinema-border px-4 md:px-8 py-3 flex items-center justify-between">
       {/* Brand Logo */}
       <div 
-        className="flex items-center gap-2 cursor-pointer select-none group"
+        className={`items-center gap-2 cursor-pointer select-none group ${isSearchFocused ? "hidden sm:flex" : "flex"}`}
         onClick={() => {
           clearSearch();
           setActiveView("home");
@@ -163,7 +163,7 @@ export default function Navbar() {
         </div>
 
         {/* Small screen navigation shortcut buttons */}
-        <div className="flex md:hidden items-center gap-1.5">
+        <div className={`items-center gap-1.5 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
           <button
             onClick={() => { clearSearch(); setActiveView("movies"); }}
             className={`p-2 rounded-full ${activeView === "movies" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
@@ -198,6 +198,8 @@ export default function Navbar() {
         <button
           onClick={() => { clearSearch(); setActiveView("settings"); }}
           className={`p-2 rounded-full border border-cinema-border transition-all hover:bg-white/5 ${
+            isSearchFocused ? "hidden sm:inline-block" : "inline-block"
+          } ${
             activeView === "settings" ? "text-cinema-amber border-cinema-amber/30 bg-cinema-card" : "text-cinema-muted hover:text-white"
           }`}
           id="btn-nav-settings"
