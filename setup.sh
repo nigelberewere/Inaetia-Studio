@@ -36,16 +36,31 @@ else
   echo "✔ ffmpeg is already installed"
 fi
 
-if ! command -v node &> /dev/null; then
-  echo "Installing Node.js..."
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-  apt-get install -y nodejs
+NODE_UPGRADED=false
+if command -v node &> /dev/null; then
+  NODE_MAJOR=$(node -v | cut -d'.' -f1 | tr -d 'v')
 else
-  echo "✔ Node.js is already installed ($(node -v))"
+  NODE_MAJOR=0
+fi
+
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "⚠️ Current Node.js version is v$(node -v 2>/dev/null || echo "0"), which is less than 20. Tailwind CSS v4 and the modern SDKs require Node.js >= 20."
+  echo "Installing Node.js 22 (LTS) via NodeSource..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  NODE_UPGRADED=true
+else
+  echo "✔ Node.js is already installed and compatible ($(node -v))"
 fi
 
 # Build Project with Native-Binary and Cross-Platform Safety
 echo "🏗️ Installing dependencies and building production bundle..."
+
+if [ "$NODE_UPGRADED" = "true" ]; then
+  echo "🧹 Node.js was upgraded! Cleaning old node_modules to avoid native binary issues with Node 22..."
+  rm -rf node_modules package-lock.json
+fi
+
 # To save mobile data, we avoid deleting node_modules unconditionally.
 # We reuse the existing folder and only repair or clean install if absolutely necessary.
 if [ -d "node_modules" ]; then
