@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import MovieCard from "../components/MovieCard";
 import { 
-  Film, Tv, Sparkles, Folder, Play, Clock, HardDrive, 
+  Film, Tv, Shield, Folder, Play, Clock, HardDrive, 
   ChevronRight, RefreshCw, X, Clapperboard, Video
 } from "lucide-react";
 import { Movie } from "../types";
@@ -220,7 +220,7 @@ export default function Movies() {
             { id: "all", label: "All Media", icon: Folder },
             { id: "movies", label: "Movies", icon: Clapperboard },
             { id: "tvshows", label: "TV Shows", icon: Tv },
-            { id: "marvel", label: "Marvel Universe", icon: Sparkles },
+            { id: "marvel", label: "Marvel Universe", icon: Shield },
             { id: "cartoons", label: "Cartoons", icon: Video },
             { id: "videos", label: "Videos & Clips", icon: Film }
           ] as const

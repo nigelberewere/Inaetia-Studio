@@ -8,7 +8,7 @@ export const PRESET_AVATARS = [
   "Popcorn",
   "Flame",
   "Ghost",
-  "Sparkles",
+  "Star",
   "Crown",
   "Shield",
   "Gamepad2",

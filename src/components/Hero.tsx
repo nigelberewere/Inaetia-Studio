@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
-import { Play, Info, Calendar, Clock, Disc, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { formatDuration, formatSize } from "../utils";
 
@@ -40,7 +40,7 @@ export default function Hero({ movies = [], movie }: HeroProps) {
       <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] min-h-[280px] sm:min-h-[320px] max-h-[500px] rounded-2xl overflow-hidden bg-gradient-to-r from-cinema-card to-cinema-bg border border-cinema-border flex flex-col justify-center px-6 sm:px-8 md:px-16 py-8 sm:py-12 mb-8">
         <div className="max-w-xl space-y-3 sm:space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-cinema-amber/10 text-cinema-amber border border-cinema-amber/20 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" /> Welcome to Inaetia Studios
+            <Tv className="w-3.5 h-3.5" /> Welcome to Inaetia Studios
           </div>
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight">
             Inaetia Studios Cinema Server
@@ -102,7 +102,7 @@ export default function Hero({ movies = [], movie }: HeroProps) {
           <div className="relative z-10 max-w-2xl space-y-4">
             {/* Amber tag indicator */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-cinema-amber/10 border border-cinema-amber/20 text-cinema-amber rounded-full text-xs font-semibold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Featured Movie {list.length > 1 && `(${currentIndex + 1}/${list.length})`}
+              <Clapperboard className="w-3.5 h-3.5 animate-pulse" /> Featured Movie {list.length > 1 && `(${currentIndex + 1}/${list.length})`}
             </div>
 
             {/* Title */}

@@ -2,7 +2,7 @@ import React from "react";
 import { useApp } from "../context/AppContext";
 import Hero from "../components/Hero";
 import MovieCard from "../components/MovieCard";
-import { Sparkles, Film, Disc, Clock } from "lucide-react";
+import { Flame, Film, Disc, Clock } from "lucide-react";
 
 export default function Home() {
   const { movies, loading, error, continueWatching } = useApp();
@@ -122,7 +122,7 @@ export default function Home() {
       {recentlyAdded.length > 0 && (
         <section className="space-y-4" id="home-row-recent">
           <div className="flex items-center gap-2 text-cinema-amber font-semibold">
-            <Sparkles className="w-5 h-5" />
+            <Flame className="w-5 h-5" />
             <h2 className="text-lg md:text-xl font-extrabold tracking-tight text-white uppercase">Recently Added</h2>
           </div>
           <div className="horizontal-scroll">

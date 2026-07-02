@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { safeFetch } from "../utils";
 import { RadioStation, RadioNowPlaying } from "../types";
 import { 
-  Radio as RadioIcon, Play, Pause, RefreshCw, Sparkles, 
+  Radio as RadioIcon, Play, Pause, RefreshCw, Zap, 
   Folder, Calendar, Music, Clock
 } from "lucide-react";
 
@@ -190,7 +190,7 @@ export default function Radio() {
                     <div className="flex items-center gap-2">
                       {station.isSmart ? (
                         <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-cinema-amber/10 text-cinema-amber text-[10px] font-bold tracking-wider uppercase">
-                          <Sparkles className="w-3 h-3" />
+                          <Zap className="w-3 h-3" />
                           Smart Station
                         </div>
                       ) : (

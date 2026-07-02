@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { useApp, ViewType } from "../context/AppContext";
-import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2, Radio as RadioIcon } from "lucide-react";
+import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2, Radio as RadioIcon, Sparkles } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 export default function Navbar() {
@@ -129,6 +129,18 @@ export default function Navbar() {
           <MusicIcon className="w-4 h-4" />
           Music
         </button>
+        <button
+          id="btn-nav-logos"
+          onClick={() => { clearSearch(); setActiveView("logos"); }}
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+            activeView === "logos"
+              ? "bg-cinema-amber text-cinema-bg shadow-md"
+              : "text-cinema-text hover:text-white hover:bg-white/5"
+          }`}
+        >
+          <Sparkles className="w-4 h-4" />
+          Lab
+        </button>
       </div>
 
       {/* Right Tools: Search Bar & Settings & Avatar */}
@@ -191,6 +203,13 @@ export default function Navbar() {
             title="Music"
           >
             <MusicIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => { clearSearch(); setActiveView("logos"); }}
+            className={`p-2 rounded-full ${activeView === "logos" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            title="Brand Lab"
+          >
+            <Sparkles className="w-5 h-5" />
           </button>
         </div>
 

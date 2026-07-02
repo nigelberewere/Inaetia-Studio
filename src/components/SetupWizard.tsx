@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 import { safeFetch } from "../utils";
 import { 
-  Sparkles, Monitor, Cpu, Check, ShieldAlert, 
+  Server, Monitor, Cpu, Check, ShieldAlert, 
   Folder, ArrowRight, ArrowLeft, Loader2, Play
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -316,7 +316,7 @@ export default function SetupWizard() {
               >
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-cinema-amber/10 text-cinema-amber border border-cinema-amber/20 rounded-full text-xs font-bold uppercase tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5" /> Welcome to {appNameInput}
+                    <Server className="w-3.5 h-3.5" /> Welcome to {appNameInput}
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-tight">
                     Inaetia Studios Server Setup
@@ -709,7 +709,7 @@ export default function SetupWizard() {
                 </>
               ) : (
                 <>
-                  Finish Installation <Sparkles className="w-4 h-4" />
+                  Finish Installation <Check className="w-4 h-4" />
                 </>
               )}
             </button>
