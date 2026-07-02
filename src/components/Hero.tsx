@@ -3,6 +3,7 @@ import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
 import { Play, Info, Calendar, Clock, Disc, Sparkles, ChevronLeft, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { formatDuration, formatSize } from "../utils";
 
 interface HeroProps {
   movies?: Movie[];
@@ -39,10 +40,10 @@ export default function Hero({ movies = [], movie }: HeroProps) {
       <div className="relative w-full aspect-[21/9] min-h-[320px] max-h-[500px] rounded-2xl overflow-hidden bg-gradient-to-r from-cinema-card to-cinema-bg border border-cinema-border flex flex-col justify-center px-8 md:px-16 py-12 mb-8">
         <div className="max-w-xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-cinema-amber/10 text-cinema-amber border border-cinema-amber/20 rounded-full text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" /> Welcome to NigelCloud
+            <Sparkles className="w-3.5 h-3.5" /> Welcome to Inaetia Studios
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white leading-tight">
-            NigelCloud Cinema Server
+            Inaetia Studios Cinema Server
           </h1>
           <p className="text-cinema-muted text-sm md:text-base max-w-md">
             Stream your media files beautifully directly from your Ubuntu server at 192.168.4.1. Access completely offline from your phones, laptops, and smart TVs.
@@ -54,27 +55,6 @@ export default function Hero({ movies = [], movie }: HeroProps) {
   }
 
   const activeMovie = list[currentIndex];
-
-  // Format Duration (Seconds to Hh Mm Ss)
-  const formatDuration = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`;
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) {
-      return `${h}h ${m}m`;
-    }
-    return `${m}m ${s}s`;
-  };
-
-  // Humanize File Size
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-  };
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -2,6 +2,7 @@ import React from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
 import { Play, Clock, HardDrive } from "lucide-react";
+import { formatDuration, formatSize } from "../utils";
 
 interface MovieCardProps {
   movie: Movie;
@@ -10,22 +11,6 @@ interface MovieCardProps {
 
 export default function MovieCard({ movie, progress }: MovieCardProps) {
   const { setCurrentVideo } = useApp();
-
-  const formatDuration = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`;
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-  };
 
   return (
     <div

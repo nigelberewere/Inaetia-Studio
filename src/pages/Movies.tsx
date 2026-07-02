@@ -6,6 +6,7 @@ import {
   ChevronRight, RefreshCw, X, Clapperboard, Video
 } from "lucide-react";
 import { Movie } from "../types";
+import { formatDuration, formatSize } from "../utils";
 
 type CategoryType = "all" | "movies" | "tvshows" | "marvel" | "cartoons" | "videos";
 
@@ -23,22 +24,6 @@ export default function Movies() {
       return (watchRecord.position / watchRecord.duration) * 100;
     }
     return undefined;
-  };
-
-  const formatDuration = (seconds: number) => {
-    if (seconds < 60) return `${seconds}s`;
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  };
-
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
   // Group all episodes into unique TV Shows

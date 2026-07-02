@@ -29,16 +29,27 @@ export default function Home() {
     return scored.slice(0, 6).map((item) => item.movie);
   }, [movies]);
 
-  // Row 1: Recently Added (last 10 by file date)
-  const recentlyAdded = [...movies]
-    .sort((a, b) => new Date(b.added).getTime() - new Date(a.added).getTime())
-    .slice(0, 10);
+  // Row 1: Recently Added (last 10 non-episode movies by file date)
+  const recentlyAdded = React.useMemo(() => {
+    return [...movies]
+      .filter((m) => m.type !== "episode")
+      .sort((a, b) => new Date(b.added).getTime() - new Date(a.added).getTime())
+      .slice(0, 10);
+  }, [movies]);
 
-  // Row 2: All Movies
-  const allMovies = movies;
+  // Row 2: Featured Movies Directory (limit to 15 items to keep Safari rendering snappy)
+  const allMovies = React.useMemo(() => {
+    return movies
+      .filter((m) => m.type === "movie")
+      .slice(0, 15);
+  }, [movies]);
 
-  // Row 3: Large Files (files > 2GB, i.e., 2 * 1024 * 1024 * 1024 bytes)
-  const largeFiles = movies.filter((m) => m.size > 2 * 1024 * 1024 * 1024);
+  // Row 3: Large High-Definition Files (files > 2GB, limit to 10 items)
+  const largeFiles = React.useMemo(() => {
+    return movies
+      .filter((m) => m.size > 2 * 1024 * 1024 * 1024 && m.type !== "episode")
+      .slice(0, 10);
+  }, [movies]);
 
   if (loading) {
     return (

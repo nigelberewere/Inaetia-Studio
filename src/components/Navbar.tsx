@@ -67,11 +67,15 @@ export default function Navbar() {
         }}
         id="nav-logo"
       >
-        <div className="w-9 h-9 rounded-lg bg-cinema-amber flex items-center justify-center font-bold text-cinema-bg text-xl transition-transform group-hover:scale-105 shadow-lg shadow-cinema-amber/10">
-          N
+        <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-cinema-amber to-amber-600 flex items-center justify-center transition-all duration-300 group-hover:scale-105 shadow-lg shadow-cinema-amber/20 group-hover:shadow-cinema-amber/30">
+          <svg className="w-5 h-5 text-cinema-bg" viewBox="0 0 24 24" fill="currentColor">
+            {/* Elegant cinematic stylized vertical stroke 'I' & play button */}
+            <rect x="5" y="5" width="2.5" height="14" rx="0.75" />
+            <path d="M10 5l9 7-9 7V5z" />
+          </svg>
         </div>
         <span className="font-semibold text-lg tracking-wider hidden sm:inline-block">
-          NigelCloud<span className="text-cinema-amber font-light"> Cinema</span>
+          Inaetia<span className="text-cinema-amber font-light"> Studios</span>
         </span>
       </div>
 

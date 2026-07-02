@@ -247,7 +247,7 @@ export default function Settings() {
           </div>
 
           <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-3 mt-4 text-[11px] font-mono space-y-1.5 text-cinema-muted">
-            <p>📡 <span className="text-white font-semibold">SSID:</span> NigelCloud Home WiFi</p>
+            <p>📡 <span className="text-white font-semibold">SSID:</span> Inaetia Studios WiFi</p>
             <p>🔗 <span className="text-white font-semibold">Address:</span> http://192.168.4.1:3000</p>
             <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPhone Safari, Android Chrome, Samsung TV</p>
           </div>

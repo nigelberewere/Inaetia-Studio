@@ -18,9 +18,6 @@ process.on("unhandledRejection", (reason, promise) => {
 
 dotenv.config();
 
-const DEMO_MODE = process.env.DEMO_MODE === "true";
-console.log(`🎬 NigelCloud Cinema Startup: DEMO_MODE is ${DEMO_MODE ? "ON" : "OFF"}`);
-
 const app = express();
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
@@ -39,39 +36,24 @@ const VIDEOS_PATH = process.env.VIDEOS_PATH || "/mnt/storage/Videos";
 const MUSIC_PATH = process.env.MUSIC_PATH || "/mnt/storage/Music";
 const PICTURES_PATH = process.env.PICTURES_PATH || "/mnt/storage/Pictures";
 
-// Validate Environment Variables and Path Existence in Production
-if (!DEMO_MODE) {
-  const requiredPaths = { VIDEOS_PATH, MUSIC_PATH };
-  Object.entries(requiredPaths).forEach(([key, val]) => {
-    if (!val) {
-      console.warn(`⚠️  WARNING: ${key} environment variable is not defined.`);
-    } else if (!fs.existsSync(val)) {
-      console.warn(`⚠️  WARNING: ${key} points to a non-existent path: "${val}". Please check your drive mounting and server configuration.`);
-    } else {
-      console.log(`✅ ${key} is valid and exists: "${val}"`);
-    }
-  });
-}
-
-// Isolated demo folders
-const demoVideosDir = path.join(process.cwd(), "demo-media/Videos");
-const demoMusicDir = path.join(process.cwd(), "demo-media/Music");
-const demoPicturesDir = path.join(process.cwd(), "demo-media/Pictures");
+// Validate Environment Variables and Path Existence
+const requiredPaths = { VIDEOS_PATH, MUSIC_PATH };
+Object.entries(requiredPaths).forEach(([key, val]) => {
+  if (!val) {
+    console.warn(`⚠️  WARNING: ${key} environment variable is not defined.`);
+  } else if (!fs.existsSync(val)) {
+    console.warn(`⚠️  WARNING: ${key} points to a non-existent path: "${val}". Please check your drive mounting and server configuration.`);
+  } else {
+    console.log(`✅ ${key} is valid and exists: "${val}"`);
+  }
+});
 
 // Determine which folders to scan. Use workspace fallbacks if system mount is unavailable.
-const targetVideosDir = DEMO_MODE
-  ? demoVideosDir
-  : (fs.existsSync(VIDEOS_PATH) ? VIDEOS_PATH : path.join(process.cwd(), "media/Videos"));
+const targetVideosDir = fs.existsSync(VIDEOS_PATH) ? VIDEOS_PATH : path.join(process.cwd(), "media/Videos");
+const targetMusicDir = fs.existsSync(MUSIC_PATH) ? MUSIC_PATH : path.join(process.cwd(), "media/Music");
+const targetPicturesDir = fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures");
 
-const targetMusicDir = DEMO_MODE
-  ? demoMusicDir
-  : (fs.existsSync(MUSIC_PATH) ? MUSIC_PATH : path.join(process.cwd(), "media/Music"));
-
-const targetPicturesDir = DEMO_MODE
-  ? demoPicturesDir
-  : (fs.existsSync(PICTURES_PATH) ? PICTURES_PATH : path.join(process.cwd(), "media/Pictures"));
-
-const hasMntStorage = !DEMO_MODE && fs.existsSync("/mnt/storage");
+const hasMntStorage = fs.existsSync("/mnt/storage");
 
 const thumbsCacheDir = "/tmp/nigelcloud/thumbs";
 
@@ -202,160 +184,7 @@ function savePersistentCache() {
 // Load cache immediately on server startup
 loadPersistentCache();
 
-// Generate mock media files if folder is empty so app works immediately in preview
-function generateMockMedia() {
-  const videosEmpty = getFilesRecursively(targetVideosDir, [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"]).length === 0;
-  const musicEmpty = getFilesRecursively(targetMusicDir, [".mp3", ".flac", ".m4a", ".wav", ".ogg", ".aac"]).length === 0;
-  
-  if (!videosEmpty && !musicEmpty) {
-    console.log("Media folders are already populated. Skipping mock media generation.");
-    return;
-  }
-  
-  console.log("Target media folders are empty. Generating mock/demo media assets so the app works instantly...");
-
-  exec("ffmpeg -version", (err) => {
-    if (err) {
-      console.log("ffmpeg not detected, using mock file fallbacks.");
-      // Create minimal text file fallbacks just in case
-      const testVideo = path.join(targetVideosDir, "Welcome_to_NigelCloud_Cinema_120s.mp4");
-      if (!fs.existsSync(testVideo)) {
-        fs.writeFileSync(testVideo, "Fake MP4 video content for testing");
-      }
-      
-      const tracks = [
-        { name: "Ambient_Chords_Demo_180s.mp3", folder: "" },
-        { name: "Late_Night_Sax_Solitude_300s.mp3", folder: "" },
-        { name: "Morning_Beats_Acoustic_Sunrise_150s.mp3", folder: "Nigel Solo/Morning Beats" },
-        { name: "Cinema_Ambient_Amber_Gold_Beats_120s.mp3", folder: "Amber Collective/Cinema Ambient" }
-      ];
-
-      tracks.forEach(tr => {
-        const parentDir = tr.folder ? path.join(targetMusicDir, tr.folder) : targetMusicDir;
-        if (!fs.existsSync(parentDir)) {
-          fs.mkdirSync(parentDir, { recursive: true });
-        }
-        const full = path.join(parentDir, tr.name);
-        if (!fs.existsSync(full)) {
-          fs.writeFileSync(full, "Fake MP3 audio content for testing");
-        }
-        // Also copy nested ones to root for extra discovery
-        if (tr.folder) {
-          const rootFull = path.join(targetMusicDir, tr.name);
-          if (!fs.existsSync(rootFull)) {
-            try { fs.copyFileSync(full, rootFull); } catch (e) {}
-          }
-        }
-      });
-
-      const testPhoto = path.join(targetPicturesDir, "Stunning_Vistas.jpg");
-      if (!fs.existsSync(testPhoto)) {
-        // Simple base64 of a 1x1 black pixel JPG
-        const minJpg = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
-        fs.writeFileSync(testPhoto, minJpg);
-      }
-      return;
-    }
-
-    console.log("ffmpeg detected! Generating rich, valid, seekable sample media assets for preview...");
-
-    // Generate Movie 1 (15s MP4)
-    const movie1 = path.join(targetVideosDir, "Nigels_Epic_Journey_15s.mp4");
-    if (!fs.existsSync(movie1)) {
-      console.log("Generating Nigels_Epic_Journey_15s.mp4...");
-      exec(
-        `ffmpeg -y -f lavfi -i "testsrc=duration=15:size=640x360:rate=24" -f lavfi -i "sine=frequency=440:duration=15" -c:v libx264 -preset ultrafast -c:a aac -pix_fmt yuv420p "${movie1}"`,
-        (e) => { if (e) console.error("Failed to generate movie1", e); }
-      );
-    }
-
-    // Generate Movie 2 (10s MKV)
-    const movie2 = path.join(targetVideosDir, "Cosmic_Symphony_10s.mkv");
-    if (!fs.existsSync(movie2)) {
-      console.log("Generating Cosmic_Symphony_10s.mkv...");
-      exec(
-        `ffmpeg -y -f lavfi -i "cellauto=duration=10:size=320x180:rate=15" -f lavfi -i "sine=frequency=220:duration=10" -c:v libx264 -preset ultrafast -c:a aac -pix_fmt yuv420p "${movie2}"`,
-        (e) => { if (e) console.error("Failed to generate movie2", e); }
-      );
-    }
-
-    // Generate Movie 3 (20s Large Mock MP4 to satisfy file > 2GB row check)
-    const movie3 = path.join(targetVideosDir, "NigelCloud_Ultra_HD_Intro.mp4");
-    if (!fs.existsSync(movie3)) {
-      console.log("Generating NigelCloud_Ultra_HD_Intro.mp4...");
-      exec(
-        `ffmpeg -y -f lavfi -i "mandelbrot=duration=8:size=1280x720:rate=24" -f lavfi -i "sine=frequency=1000:duration=8" -c:v libx264 -preset ultrafast -c:a aac -pix_fmt yuv420p "${movie3}"`,
-        (e) => { if (e) console.error("Failed to generate movie3", e); }
-      );
-    }
-
-    // Generate Audio 1 (30s MP3)
-    const audio1 = path.join(targetMusicDir, "Acoustic_Sunrise_30s.mp3");
-    const artist1Dir = path.join(targetMusicDir, "Nigel Solo/Morning Beats");
-    if (!fs.existsSync(audio1)) {
-      fs.mkdirSync(artist1Dir, { recursive: true });
-      const track1 = path.join(artist1Dir, "Acoustic_Sunrise_30s.mp3");
-      console.log("Generating Acoustic_Sunrise_30s.mp3...");
-      exec(
-        `ffmpeg -y -f lavfi -i "sine=frequency=330:duration=30" -acodec libmp3lame "${track1}"`,
-        (e) => {
-          if (e) console.error("Failed to generate audio1", e);
-          try { fs.copyFileSync(track1, audio1); } catch (err) {}
-        }
-      );
-    }
-
-    // Generate Audio 2 (15s WAV)
-    const artist2Dir = path.join(targetMusicDir, "Amber Collective/Cinema Ambient");
-    const track2 = path.join(artist2Dir, "Amber_Gold_Beats_15s.wav");
-    if (!fs.existsSync(track2)) {
-      fs.mkdirSync(artist2Dir, { recursive: true });
-      console.log("Generating Amber_Gold_Beats_15s.wav...");
-      exec(
-        `ffmpeg -y -f lavfi -i "sine=frequency=550:duration=15" "${track2}"`,
-        (e) => { if (e) console.error("Failed to generate audio2", e); }
-      );
-    }
-
-    // Generate Audio 3 (300s MP3 for Late Night smart radio)
-    const audio3 = path.join(targetMusicDir, "Late_Night_Sax_Solitude_300s.mp3");
-    if (!fs.existsSync(audio3)) {
-      console.log("Generating Late_Night_Sax_Solitude_300s.mp3...");
-      exec(
-        `ffmpeg -y -f lavfi -i "sine=frequency=220:duration=300" -acodec libmp3lame "${audio3}"`,
-        (e) => { if (e) console.error("Failed to generate audio3", e); }
-      );
-    }
-
-    // Generate Photos
-    const photo1 = path.join(targetPicturesDir, "NigelCloud_Server_Setup.jpg");
-    if (!fs.existsSync(photo1)) {
-      console.log("Generating NigelCloud_Server_Setup.jpg...");
-      exec(
-        `ffmpeg -y -f lavfi -i "testsrc=duration=1:size=1280x720:rate=1" -vframes 1 "${photo1}"`,
-        (e) => { if (e) console.error("Failed to generate photo1", e); }
-      );
-    }
-
-    const photo2 = path.join(targetPicturesDir, "Sunset_Over_Hotspot.png");
-    if (!fs.existsSync(photo2)) {
-      console.log("Generating Sunset_Over_Hotspot.png...");
-      exec(
-        `ffmpeg -y -f lavfi -i "gradients=duration=1:size=800x600:rate=1" -vframes 1 "${photo2}"`,
-        (e) => { if (e) console.error("Failed to generate photo2", e); }
-      );
-    }
-
-    const photo3 = path.join(targetPicturesDir, "Cinematic_Aesthetic.jpg");
-    if (!fs.existsSync(photo3)) {
-      console.log("Generating Cinematic_Aesthetic.jpg...");
-      exec(
-        `ffmpeg -y -f lavfi -i "mandelbrot=duration=1:size=1920x1080:rate=1" -vframes 1 "${photo3}"`,
-        (e) => { if (e) console.error("Failed to generate photo3", e); }
-      );
-    }
-  });
-}
+// Mock media generation removed for production-only deployment
 
 // Helper to recursively scan directory for matching extensions
 function getFilesRecursively(dir: string, allowedExtensions: string[]): string[] {
@@ -622,7 +451,7 @@ async function scanAllLibraries() {
 
     // Mock file size for our HD Intro to satisfy user's > 2GB check in UI
     let size = stat.size;
-    if (filename === "NigelCloud_Ultra_HD_Intro.mp4") {
+    if (filename === "InaetiaStudios_Ultra_HD_Intro.mp4" || filename === "NigelCloud_Ultra_HD_Intro.mp4") {
       // Return 2.4 GB in bytes so it is correctly categorized under "Large Files" row
       size = 2.4 * 1024 * 1024 * 1024;
     }
@@ -712,7 +541,7 @@ async function scanAllLibraries() {
   savePersistentCache();
 
   const durationMs = Date.now() - startTime;
-  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length} (DEMO_MODE: ${DEMO_MODE ? "ON" : "OFF"})`);
+  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}`);
 }
 
 // Throttled scan execution guard to prevent overlapping concurrent scans
@@ -744,8 +573,7 @@ console.log(`⏰ Periodic background rescan interval set to ${RESCAN_INTERVAL_MI
 
 // Auto scan on startup
 setTimeout(async () => {
-  generateMockMedia();
-  // Delay initial scan slightly to let ffmpeg process finished files
+  // Delay initial scan slightly to let system settle
   setTimeout(() => {
     triggerScan().catch(console.error);
   }, 1000);
@@ -1563,10 +1391,10 @@ startMidnightRefreshJob();
 function getStationsList() {
   const stations: any[] = [];
   
-  // 1. NigelCloud FM
+  // 1. Inaetia Studios FM
   stations.push({
-    id: "nigelcloud-fm",
-    name: "NigelCloud FM",
+    id: "inaetiastudios-fm",
+    name: "Inaetia Studios FM",
     stationNumber: 1,
     color: "#3B82F6",
     type: "smart",
@@ -1652,7 +1480,7 @@ function getStationsList() {
 }
 
 function getStationTracks(stationId: string) {
-  if (stationId === "nigelcloud-fm" || stationId === "shuffle-party") {
+  if (stationId === "inaetiastudios-fm" || stationId === "nigelcloud-fm" || stationId === "shuffle-party") {
     return [...musicCache].sort((a, b) => a.filepath.localeCompare(b.filepath));
   }
   
@@ -2000,7 +1828,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`====================================================`);
-    console.log(`🎬 NigelCloud Cinema backend running on port ${PORT}`);
+    console.log(`🎬 Inaetia Studios Cinema backend running on port ${PORT}`);
     console.log(`📡 Local Network Access: http://192.168.4.1:${PORT}`);
     console.log(`🛡️  System offline capability loaded perfectly`);
     console.log(`====================================================`);

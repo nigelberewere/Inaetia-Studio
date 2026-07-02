@@ -51,7 +51,7 @@ export default function SearchResults() {
         <span className="text-4xl">🔍</span>
         <h3 className="text-xl font-bold mt-4">No results for "{searchQuery}"</h3>
         <p className="text-cinema-muted text-sm mt-2">
-          Double check your spelling or try search queries with generic terms like "Nigel", "Intro", "Aesthetic", or "Sunrise".
+          Double check your spelling or try search queries with generic terms like "Inaetia", "Intro", "Aesthetic", or "Sunrise".
         </p>
       </div>
     );
