@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, RadioStation } from "../types";
 import { safeFetch } from "../utils";
 
-export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide" | "logos";
+export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
 
 interface AppContextType {
   activeView: ViewType;

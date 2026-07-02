@@ -8,7 +8,6 @@ import LiveTV from "./pages/LiveTV";
 import Radio from "./pages/Radio";
 import RadioGuide from "./pages/RadioGuide";
 import Settings from "./pages/Settings";
-import Logos from "./pages/Logos";
 import SearchResults from "./components/SearchResults";
 import MusicPlayer from "./components/MusicPlayer";
 import RadioPlayer from "./components/RadioPlayer";
@@ -67,7 +66,6 @@ function MainLayout() {
         {activeView === "radio" && <Radio />}
         {activeView === "radioguide" && <RadioGuide />}
         {activeView === "settings" && <Settings />}
-        {activeView === "logos" && <Logos />}
         {activeView === "search" && <SearchResults />}
       </main>
 

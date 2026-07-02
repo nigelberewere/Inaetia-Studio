@@ -231,8 +231,20 @@ function loadPersistentCache() {
       if (parsed) {
         moviesCache = parsed.moviesCache || [];
         musicCache = parsed.musicCache || [];
-        cachesLastUpdated = parsed.cachesLastUpdated || Date.now();
-        hasPerformedInitialScan = true;
+        
+        let loadedTimestamp = parsed.cachesLastUpdated || Date.now();
+        if (loadedTimestamp > Date.now()) {
+          loadedTimestamp = Date.now();
+        }
+        cachesLastUpdated = loadedTimestamp;
+
+        // If cache is empty, do not block scanning under hasPerformedInitialScan
+        if (moviesCache.length > 0 || musicCache.length > 0) {
+          hasPerformedInitialScan = true;
+        } else {
+          hasPerformedInitialScan = false;
+          console.log("💾 Metadata cache file exists but is empty. Setting hasPerformedInitialScan to false to trigger a fresh scan.");
+        }
         
         // Re-populate indices
         if (parsed.moviesIndexList) {
@@ -512,61 +524,72 @@ async function scanAllLibraries() {
   }
   
   const moviePromises = videoFiles.map(async (file) => {
-    const isUnderMusicVideo = envMusicVideos && file.startsWith(path.resolve(envMusicVideos));
-    const relativePath = isUnderMusicVideo
-      ? path.relative(path.dirname(envMusicVideos), file)
-      : path.relative(targetVideosDir, file);
-    const filename = path.basename(file);
-    const ext = path.extname(file);
-    const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
-    
-    // MD5 of full filepath
-    const id = crypto.createHash("md5").update(file).digest("hex");
-    moviesIndex.set(id, file);
+    try {
+      const isUnderMusicVideo = envMusicVideos && file.startsWith(path.resolve(envMusicVideos));
+      const relativePath = isUnderMusicVideo
+        ? path.relative(path.dirname(envMusicVideos), file)
+        : path.relative(targetVideosDir, file);
+      const filename = path.basename(file);
+      const ext = path.extname(file);
+      const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
+      
+      // MD5 of full filepath
+      const id = crypto.createHash("md5").update(file).digest("hex");
+      moviesIndex.set(id, file);
 
-    const stat = fs.statSync(file);
-    let duration = 120;
+      const stat = fs.statSync(file);
+      let duration = 120;
 
-    // Fast cache lookup
-    const cachedItem = existingMoviesMap.get(relativePath);
-    if (cachedItem && cachedItem.size === stat.size) {
-      duration = cachedItem.duration;
-    } else {
-      duration = await getDuration(file);
+      // Fast cache lookup
+      const cachedItem = existingMoviesMap.get(relativePath);
+      if (cachedItem && cachedItem.size === stat.size) {
+        duration = cachedItem.duration;
+      } else {
+        duration = await getDuration(file);
+      }
+
+      // Mock file size for our HD Intro to satisfy user's > 2GB check in UI
+      let size = stat.size;
+      if (filename === "InaetiaStudios_Ultra_HD_Intro.mp4" || filename === "NigelCloud_Ultra_HD_Intro.mp4") {
+        // Return 2.4 GB in bytes so it is correctly categorized under "Large Files" row
+        size = 2.4 * 1024 * 1024 * 1024;
+      }
+
+      const parsedMeta = parseVideoPath(relativePath, filename, title);
+
+      const dirName = path.dirname(file);
+      const baseName = path.basename(file, ext);
+      const hasSubtitles = fs.existsSync(path.join(dirName, baseName + ".srt")) ||
+                           fs.existsSync(path.join(dirName, baseName + ".SRT")) ||
+                           fs.existsSync(path.join(dirName, baseName + ".vtt")) ||
+                           fs.existsSync(path.join(dirName, baseName + ".VTT"));
+
+      // Handle unsupported birthtime on Linux
+      const addedDate = (stat.birthtime && stat.birthtime instanceof Date && !isNaN(stat.birthtime.getTime()) && stat.birthtime.getTime() > 0)
+        ? stat.birthtime
+        : (stat.mtime || new Date());
+
+      return {
+        id,
+        title,
+        filename,
+        filepath: relativePath,
+        size,
+        duration,
+        thumbnail: `/api/thumbnail/${id}`,
+        extension: ext,
+        added: addedDate.toISOString(),
+        hasSubtitles,
+        ...parsedMeta,
+      };
+    } catch (err: any) {
+      console.error(`⚠️ Failed to scan movie file ${file}:`, err.message || err);
+      return null;
     }
-
-    // Mock file size for our HD Intro to satisfy user's > 2GB check in UI
-    let size = stat.size;
-    if (filename === "InaetiaStudios_Ultra_HD_Intro.mp4" || filename === "NigelCloud_Ultra_HD_Intro.mp4") {
-      // Return 2.4 GB in bytes so it is correctly categorized under "Large Files" row
-      size = 2.4 * 1024 * 1024 * 1024;
-    }
-
-    const parsedMeta = parseVideoPath(relativePath, filename, title);
-
-    const dirName = path.dirname(file);
-    const baseName = path.basename(file, ext);
-    const hasSubtitles = fs.existsSync(path.join(dirName, baseName + ".srt")) ||
-                         fs.existsSync(path.join(dirName, baseName + ".SRT")) ||
-                         fs.existsSync(path.join(dirName, baseName + ".vtt")) ||
-                         fs.existsSync(path.join(dirName, baseName + ".VTT"));
-
-    return {
-      id,
-      title,
-      filename,
-      filepath: relativePath,
-      size,
-      duration,
-      thumbnail: `/api/thumbnail/${id}`,
-      extension: ext,
-      added: stat.birthtime.toISOString(),
-      hasSubtitles,
-      ...parsedMeta,
-    };
   });
 
-  moviesCache = await Promise.all(moviePromises);
+  const resolvedMovies = await Promise.all(moviePromises);
+  moviesCache = resolvedMovies.filter((item): item is NonNullable<typeof item> => item !== null);
   repopulateShowsFoldersIndex();
 
   // 2. Scan Music
@@ -574,52 +597,62 @@ async function scanAllLibraries() {
   const musicFiles = getFilesRecursively(targetMusicDir, musicExts);
 
   const musicPromises = musicFiles.map(async (file) => {
-    const relativePath = path.relative(targetMusicDir, file);
-    const filename = path.basename(file);
-    const ext = path.extname(file);
-    const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
-    
-    const id = crypto.createHash("md5").update(file).digest("hex");
-    musicIndex.set(id, file);
+    try {
+      const relativePath = path.relative(targetMusicDir, file);
+      const filename = path.basename(file);
+      const ext = path.extname(file);
+      const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
+      
+      const id = crypto.createHash("md5").update(file).digest("hex");
+      musicIndex.set(id, file);
 
-    const stat = fs.statSync(file);
-    let duration = 120;
+      const stat = fs.statSync(file);
+      let duration = 120;
 
-    // Fast cache lookup
-    const cachedItem = existingMusicMap.get(relativePath);
-    if (cachedItem && cachedItem.size === stat.size) {
-      duration = cachedItem.duration;
-    } else {
-      duration = await getDuration(file);
+      // Fast cache lookup
+      const cachedItem = existingMusicMap.get(relativePath);
+      if (cachedItem && cachedItem.size === stat.size) {
+        duration = cachedItem.duration;
+      } else {
+        duration = await getDuration(file);
+      }
+
+      // Derive Artist and Album from Directory Structure: /Artist/Album/File.mp3
+      const parts = relativePath.split(path.sep);
+      let artist = "Unknown Artist";
+      let album = "Unknown Album";
+
+      if (parts.length >= 3) {
+        artist = parts[parts.length - 3];
+        album = parts[parts.length - 2];
+      } else if (parts.length === 2) {
+        artist = parts[0];
+        album = "Single";
+      }
+
+      const addedDate = (stat.birthtime && stat.birthtime instanceof Date && !isNaN(stat.birthtime.getTime()) && stat.birthtime.getTime() > 0)
+        ? stat.birthtime
+        : (stat.mtime || new Date());
+
+      return {
+        id,
+        title,
+        artist,
+        album,
+        filename,
+        filepath: relativePath,
+        duration,
+        size: stat.size,
+        added: (stat.mtime || addedDate).toISOString(),
+      };
+    } catch (err: any) {
+      console.error(`⚠️ Failed to scan music track ${file}:`, err.message || err);
+      return null;
     }
-
-    // Derive Artist and Album from Directory Structure: /Artist/Album/File.mp3
-    const parts = relativePath.split(path.sep);
-    let artist = "Unknown Artist";
-    let album = "Unknown Album";
-
-    if (parts.length >= 3) {
-      artist = parts[parts.length - 3];
-      album = parts[parts.length - 2];
-    } else if (parts.length === 2) {
-      artist = parts[0];
-      album = "Single";
-    }
-
-    return {
-      id,
-      title,
-      artist,
-      album,
-      filename,
-      filepath: relativePath,
-      duration,
-      size: stat.size,
-      added: stat.mtime.toISOString(),
-    };
   });
 
-  musicCache = await Promise.all(musicPromises);
+  const resolvedMusic = await Promise.all(musicPromises);
+  musicCache = resolvedMusic.filter((item): item is NonNullable<typeof item> => item !== null);
 
   cachesLastUpdated = Date.now();
   hasPerformedInitialScan = true;
@@ -671,7 +704,7 @@ setInterval(() => {
 
 // Check if caches need manual or automatic reload (remains lightweight and non-blocking)
 async function checkCache() {
-  if (hasPerformedInitialScan) {
+  if (hasPerformedInitialScan && (moviesCache.length > 0 || musicCache.length > 0)) {
     // If the cache is stale, trigger a scan in the background asynchronously, but do NOT block current requests!
     if (Date.now() - cachesLastUpdated > CACHE_LIFETIME) {
       console.log("⏱️ Cache is stale, triggering background rescan without blocking user response.");
@@ -680,8 +713,8 @@ async function checkCache() {
     return;
   }
 
-  // Only block the request if there is absolutely no cache data anywhere
-  console.log("⚠️ No cache data found in memory. Performing a blocking initial scan...");
+  // Only block the request if there is absolutely no cache data anywhere or caches are empty
+  console.log("⚠️ No cache data found in memory or cache is empty. Performing a blocking initial scan...");
   await triggerScan();
 }
 
@@ -2287,8 +2320,12 @@ SERVER_IP="${getServerIpAddress()}"
 
     reinitializePathsAndSettings();
 
-    // Trigger scan asynchronously in background
-    triggerScan().catch(console.error);
+    // Trigger scan and wait for it to complete so that media is available immediately!
+    try {
+      await triggerScan();
+    } catch (scanErr) {
+      console.error("Initial scan during setup failed:", scanErr);
+    }
 
     res.json({ success: true });
   } catch (err: any) {
