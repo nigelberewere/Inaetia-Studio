@@ -194,20 +194,6 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Settings button */}
-        <button
-          onClick={() => { clearSearch(); setActiveView("settings"); }}
-          className={`p-2 rounded-full border border-cinema-border transition-all hover:bg-white/5 ${
-            isSearchFocused ? "hidden sm:inline-block" : "inline-block"
-          } ${
-            activeView === "settings" ? "text-cinema-amber border-cinema-amber/30 bg-cinema-card" : "text-cinema-muted hover:text-white"
-          }`}
-          id="btn-nav-settings"
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </button>
-
         {/* Active Profile Avatar with Dropdown */}
         {currentProfile && (
           <div className="relative" ref={dropdownRef}>
@@ -245,6 +231,18 @@ export default function Navbar() {
                       id="btn-dropdown-switch"
                     >
                       <Users className="w-4 h-4 text-cinema-amber" /> Switch Profile
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        clearSearch();
+                        setActiveView("settings");
+                        setShowDropdown(false);
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-white/5 hover:text-white rounded-lg transition-colors flex items-center gap-2"
+                      id="btn-dropdown-settings"
+                    >
+                      <Settings className="w-4 h-4 text-cinema-amber" /> Settings
                     </button>
 
                     <button
