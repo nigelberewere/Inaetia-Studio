@@ -259,51 +259,86 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
     const videoBase = path.basename(videoFilePath, ext);
     const exts = [".jpg", ".jpeg", ".png", ".webp"];
 
+    // Check if the directory is a library root directory where multiple loose media files live.
+    // If it is, we should not match generic poster/folder/fanart files as they belong to the library parent, not the specific file.
+    const envVideos = process.env.VIDEOS_PATH ? path.resolve(process.env.VIDEOS_PATH).toLowerCase() : "";
+    const envMusic = process.env.MUSIC_PATH ? path.resolve(process.env.MUSIC_PATH).toLowerCase() : "";
+    const resolvedDir = path.resolve(dir).toLowerCase();
+    const dirNameLower = path.basename(dir).toLowerCase();
+
+    const isLibraryRoot = resolvedDir === envVideos ||
+                          resolvedDir === envMusic ||
+                          dirNameLower === "movies" ||
+                          dirNameLower === "videos" ||
+                          dirNameLower === "tv shows" ||
+                          dirNameLower === "tv series" ||
+                          dirNameLower === "tvshows" ||
+                          dirNameLower === "cartoons" ||
+                          dirNameLower === "marvel movies" ||
+                          dirNameLower === "marvel universe" ||
+                          dirNameLower === "music" ||
+                          dirNameLower === "music videos" ||
+                          dirNameLower === "pictures";
+
     // 1. Locate poster
     // E.g. "The Dark Knight-poster.jpg" or "poster.jpg"
-    let posterPath = fileExistsCaseInsensitive(dir, videoBase + "-poster", exts) ||
-                     fileExistsCaseInsensitive(dir, "poster", exts) ||
-                     fileExistsCaseInsensitive(dir, "folder", exts);
+    let posterPath = fileExistsCaseInsensitive(dir, videoBase + "-poster", exts);
+    if (!posterPath && !isLibraryRoot) {
+      posterPath = fileExistsCaseInsensitive(dir, "poster", exts) ||
+                   fileExistsCaseInsensitive(dir, "folder", exts);
+    }
     
     // 2. Locate fanart
-    let fanartPath = fileExistsCaseInsensitive(dir, videoBase + "-fanart", exts) ||
-                     fileExistsCaseInsensitive(dir, "fanart", exts) ||
-                     fileExistsCaseInsensitive(dir, "background", exts);
+    let fanartPath = fileExistsCaseInsensitive(dir, videoBase + "-fanart", exts);
+    if (!fanartPath && !isLibraryRoot) {
+      fanartPath = fileExistsCaseInsensitive(dir, "fanart", exts) ||
+                   fileExistsCaseInsensitive(dir, "background", exts);
+    }
 
     // 3. Locate thumb
-    let thumbPath = fileExistsCaseInsensitive(dir, videoBase + "-thumb", exts) ||
-                    fileExistsCaseInsensitive(dir, "thumb", exts) ||
-                    fileExistsCaseInsensitive(dir, "landscape", exts);
+    let thumbPath = fileExistsCaseInsensitive(dir, videoBase + "-thumb", exts);
+    if (!thumbPath && !isLibraryRoot) {
+      thumbPath = fileExistsCaseInsensitive(dir, "thumb", exts) ||
+                  fileExistsCaseInsensitive(dir, "landscape", exts);
+    }
 
     // 4. Locate banner
-    let bannerPath = fileExistsCaseInsensitive(dir, videoBase + "-banner", exts) ||
-                     fileExistsCaseInsensitive(dir, "banner", exts);
+    let bannerPath = fileExistsCaseInsensitive(dir, videoBase + "-banner", exts);
+    if (!bannerPath && !isLibraryRoot) {
+      bannerPath = fileExistsCaseInsensitive(dir, "banner", exts);
+    }
 
     // 5. Locate logo / clearlogo
-    let logoPath = fileExistsCaseInsensitive(dir, videoBase + "-logo", exts) ||
-                   fileExistsCaseInsensitive(dir, "logo", exts) ||
-                   fileExistsCaseInsensitive(dir, "clearlogo", exts);
+    let logoPath = fileExistsCaseInsensitive(dir, videoBase + "-logo", exts);
+    if (!logoPath && !isLibraryRoot) {
+      logoPath = fileExistsCaseInsensitive(dir, "logo", exts) ||
+                 fileExistsCaseInsensitive(dir, "clearlogo", exts);
+    }
 
     // If not found, and we might be inside a Season XX folder (or episode folder), check the parent (TV show level folder)
     const parentDir = path.dirname(dir);
-    const dirName = path.basename(dir).toLowerCase();
-    const isSeasonFolder = /^(season|s)\s*\d+/i.test(dirName);
+    const isSeasonFolder = /^(season|s)\s*\d+/i.test(dirNameLower);
 
     if (isSeasonFolder && parentDir && parentDir !== dir) {
-      if (!posterPath) {
-        posterPath = fileExistsCaseInsensitive(parentDir, "poster", exts) ||
-                     fileExistsCaseInsensitive(parentDir, "folder", exts);
-      }
-      if (!fanartPath) {
-        fanartPath = fileExistsCaseInsensitive(parentDir, "fanart", exts) ||
-                     fileExistsCaseInsensitive(parentDir, "background", exts);
-      }
-      if (!bannerPath) {
-        bannerPath = fileExistsCaseInsensitive(parentDir, "banner", exts);
-      }
-      if (!logoPath) {
-        logoPath = fileExistsCaseInsensitive(parentDir, "logo", exts) ||
-                   fileExistsCaseInsensitive(parentDir, "clearlogo", exts);
+      const parentDirLower = path.basename(parentDir).toLowerCase();
+      const isParentRoot = parentDirLower === "tv shows" || parentDirLower === "tv series" || parentDirLower === "tvshows";
+      
+      if (!isParentRoot) {
+        if (!posterPath) {
+          posterPath = fileExistsCaseInsensitive(parentDir, "poster", exts) ||
+                       fileExistsCaseInsensitive(parentDir, "folder", exts);
+        }
+        if (!fanartPath) {
+          fanartPath = fileExistsCaseInsensitive(parentDir, "fanart", exts) ||
+                       fileExistsCaseInsensitive(parentDir, "background", exts);
+        }
+        if (!bannerPath) {
+          bannerPath = fileExistsCaseInsensitive(parentDir, "banner", exts);
+        }
+        if (!logoPath) {
+          logoPath = fileExistsCaseInsensitive(parentDir, "logo", exts) ||
+                     fileExistsCaseInsensitive(parentDir, "clearlogo", exts);
+        }
       }
     }
 
