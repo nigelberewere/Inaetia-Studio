@@ -15,6 +15,41 @@ export interface Movie {
   seasonName?: string;
   episodeTitle?: string;
   hasSubtitles?: boolean;
+
+  // Tiny Media Manager & Rich metadata fields
+  originalTitle?: string | null;
+  year?: number | null;
+  rating?: number | null;
+  votes?: number | null;
+  mpaa?: string | null;
+  runtime?: number | null;
+  plot?: string | null;
+  tagline?: string | null;
+  genres?: string[];
+  studio?: string | null;
+  director?: string | null;
+  actors?: Array<{ name: string; role: string }>;
+  trailer?: string | null;
+
+  // Artwork paths (served via API)
+  poster?: string | null;
+  fanart?: string | null;
+  thumb?: string | null;
+  hasPoster?: boolean;
+  hasFanart?: boolean;
+  hasThumb?: boolean;
+
+  // TV Show Grouping
+  showTitle?: string | null;
+  showPoster?: string | null;
+  showFanart?: string | null;
+  season?: number | null;
+  episode?: number | null;
+  airDate?: string | null;
+
+  // Metadata source tracking
+  metadataSource?: "nfo" | "filename";
+  hasRichMetadata?: boolean;
 }
 
 export interface Track {

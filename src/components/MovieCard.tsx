@@ -1,27 +1,45 @@
 import React from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
-import { Play, Clock, HardDrive } from "lucide-react";
+import { Play, Clock, HardDrive, Star } from "lucide-react";
 import { formatDuration, formatSize } from "../utils";
 
 interface MovieCardProps {
   movie: Movie;
   progress?: number;
+  onClick?: () => void;
+  aspect?: "portrait" | "landscape";
 }
 
-export default function MovieCard({ movie, progress }: MovieCardProps) {
+export default function MovieCard({ movie, progress, onClick, aspect }: MovieCardProps) {
   const { setCurrentVideo } = useApp();
+
+  const handleCardClick = () => {
+    if (onClick) {
+      onClick();
+    } else {
+      setCurrentVideo(movie);
+    }
+  };
+
+  // Default to portrait for movies, and landscape for episodes or simple clips
+  const cardAspect = aspect || (movie.type === "movie" || movie.hasPoster ? "portrait" : "landscape");
+  
+  const isPortrait = cardAspect === "portrait";
+  const imageSrc = isPortrait 
+    ? (movie.poster || `/api/artwork/${movie.id}/poster`) 
+    : (movie.thumb || movie.thumbnail || `/api/artwork/${movie.id}/thumb`);
 
   return (
     <div
       id={`movie-card-${movie.id}`}
-      onClick={() => setCurrentVideo(movie)}
+      onClick={handleCardClick}
       className="group relative bg-cinema-card rounded-xl overflow-hidden border border-cinema-border cursor-pointer flex flex-col movie-card-hover"
     >
-      {/* Thumbnail Container */}
-      <div className="relative aspect-[16/9] w-full overflow-hidden bg-black/40">
+      {/* Thumbnail/Poster Container */}
+      <div className={`relative ${isPortrait ? "aspect-[2/3]" : "aspect-[16/9]"} w-full overflow-hidden bg-black/40`}>
         <img
-          src={movie.thumbnail}
+          src={imageSrc}
           alt={movie.title}
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -39,6 +57,20 @@ export default function MovieCard({ movie, progress }: MovieCardProps) {
         <span className="absolute top-2 right-2 px-1.5 py-0.5 bg-black/75 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase tracking-wider">
           {movie.extension.replace(".", "")}
         </span>
+
+        {/* Rating/Year overlay on poster bottom (for sleek info) */}
+        {isPortrait && (movie.rating || movie.year) && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-0.5 bg-black/70 backdrop-blur-md rounded text-[10px] font-bold text-white">
+            {movie.rating && (
+              <span className="flex items-center gap-0.5 text-cinema-amber">
+                <Star className="w-2.5 h-2.5 fill-current" />
+                {movie.rating.toFixed(1)}
+              </span>
+            )}
+            {movie.rating && movie.year && <span className="opacity-40">|</span>}
+            {movie.year && <span>{movie.year}</span>}
+          </div>
+        )}
       </div>
 
       {/* Meta Content */}

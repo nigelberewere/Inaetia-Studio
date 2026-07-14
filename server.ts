@@ -32,6 +32,7 @@ app.use((req, res, next) => {
 });
 
 import os from "os";
+import { findNfoFile, parseNfo, findArtwork, parseTvShowNfo, parseSeasonEpisode, cleanFilenameTitle } from "./src/nfoReader";
 
 // Helper to resolve ~ in paths
 function resolveHome(filepath: string): string {
@@ -530,20 +531,47 @@ async function scanAllLibraries() {
         ? path.relative(path.dirname(envMusicVideos), file)
         : path.relative(targetVideosDir, file);
       const filename = path.basename(file);
-      const ext = path.extname(file);
-      const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
+      const ext = path.extname(file).toLowerCase();
       
       // MD5 of full filepath
       const id = crypto.createHash("md5").update(file).digest("hex");
       moviesIndex.set(id, file);
 
       const stat = fs.statSync(file);
-      let duration = 120;
 
-      // Fast cache lookup
+      // Find and check NFO modification time
+      const nfoPath = findNfoFile(file);
+      let nfoStat: fs.Stats | null = null;
+      if (nfoPath) {
+        try {
+          nfoStat = fs.statSync(nfoPath);
+        } catch (_) {}
+      }
+      const nfoMtime = nfoStat ? nfoStat.mtime.toISOString() : null;
+
+      // Fast cache lookup (video file unchanged AND NFO unchanged)
       const cachedItem = existingMoviesMap.get(relativePath);
-      if (cachedItem && cachedItem.size === stat.size) {
-        duration = cachedItem.duration;
+      if (cachedItem && cachedItem.size === stat.size && cachedItem.nfoMtime === nfoMtime) {
+        // Essential: make sure movie is indexable for stream and artwork retrieval
+        moviesIndex.set(cachedItem.id, file);
+        return cachedItem;
+      }
+
+      // Try NFO parsing
+      let nfo = nfoPath ? parseNfo(nfoPath) : null;
+
+      // Title logic
+      let title = "";
+      if (nfo && nfo.title) {
+        title = nfo.title;
+      } else {
+        title = cleanFilenameTitle(filename, ext);
+      }
+
+      // Duration: if runtime exists in NFO, use it. Otherwise, getDuration via ffprobe.
+      let duration = 120;
+      if (nfo && nfo.runtime && nfo.runtime > 0) {
+        duration = nfo.runtime;
       } else {
         duration = await getDuration(file);
       }
@@ -551,7 +579,6 @@ async function scanAllLibraries() {
       // Mock file size for our HD Intro to satisfy user's > 2GB check in UI
       let size = stat.size;
       if (filename === "InaetiaStudios_Ultra_HD_Intro.mp4" || filename === "NigelCloud_Ultra_HD_Intro.mp4") {
-        // Return 2.4 GB in bytes so it is correctly categorized under "Large Files" row
         size = 2.4 * 1024 * 1024 * 1024;
       }
 
@@ -569,18 +596,142 @@ async function scanAllLibraries() {
         ? stat.birthtime
         : (stat.mtime || new Date());
 
+      // TV Show awareness
+      const epPattern = parseSeasonEpisode(filename);
+      const tvShowNfoPath = findTvShowNfo(file);
+      const isTvShow = !!tvShowNfoPath || epPattern.season !== null || parsedMeta.type === "episode";
+
+      let type: "movie" | "episode" | "video" = isTvShow ? "episode" : (parsedMeta.type === "movie" ? "movie" : "video");
+      let showTitle: string | null = null;
+      let season: number | null = epPattern.season;
+      let episode: number | null = epPattern.episode;
+      let episodeTitle: string | null = null;
+      let airDate: string | null = null;
+
+      let showPosterExists = false;
+      let showFanartExists = false;
+
+      // Find and check show folder
+      function findTvShowNfo(videoFilePath: string): string | null {
+        const dir = path.dirname(videoFilePath);
+        const parentNfo = path.join(dir, "tvshow.nfo");
+        if (fs.existsSync(parentNfo)) return parentNfo;
+        const gpDir = path.dirname(dir);
+        if (gpDir && gpDir !== dir) {
+          const gpNfo = path.join(gpDir, "tvshow.nfo");
+          if (fs.existsSync(gpNfo)) return gpNfo;
+        }
+        return null;
+      }
+
+      if (isTvShow) {
+        if (tvShowNfoPath) {
+          const parsedShow = parseTvShowNfo(tvShowNfoPath);
+          if (parsedShow && parsedShow.title) {
+            showTitle = parsedShow.title;
+          }
+          const showDir = path.dirname(tvShowNfoPath);
+          if (fs.existsSync(showDir)) {
+            try {
+              const files = fs.readdirSync(showDir);
+              const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+              showPosterExists = files.some((f) => {
+                const ext = path.extname(f).toLowerCase();
+                if (!imageExtensions.includes(ext)) return false;
+                const base = path.basename(f, ext).toLowerCase();
+                return base === "poster" || base === "folder";
+              });
+              showFanartExists = files.some((f) => {
+                const ext = path.extname(f).toLowerCase();
+                if (!imageExtensions.includes(ext)) return false;
+                const base = path.basename(f, ext).toLowerCase();
+                return base === "fanart" || base === "background";
+              });
+            } catch (_) {}
+          }
+        }
+
+        if (!showTitle) {
+          showTitle = parsedMeta.showName || "Unknown Show";
+        }
+
+        if (nfo && nfo.title) {
+          episodeTitle = nfo.title;
+        } else {
+          episodeTitle = cleanFilenameTitle(filename, ext);
+        }
+
+        if (nfo && nfo.aired) {
+          airDate = nfo.aired;
+        }
+
+        if (nfo) {
+          if (nfo.season !== null && nfo.season !== undefined) season = nfo.season;
+          if (nfo.episode !== null && nfo.episode !== undefined) episode = nfo.episode;
+        }
+      }
+
+      // Artwork detection
+      const artwork = findArtwork(file);
+      const poster = artwork.poster ? `/api/artwork/${id}/poster` : null;
+      const fanart = artwork.fanart ? `/api/artwork/${id}/fanart` : null;
+      const thumb = artwork.thumb ? `/api/artwork/${id}/thumb` : `/api/artwork/${id}/thumb`;
+
       return {
         id,
-        title,
         filename,
         filepath: relativePath,
         size,
-        duration,
-        thumbnail: `/api/thumbnail/${id}`,
         extension: ext,
         added: addedDate.toISOString(),
+
+        // Enriched from NFO
+        title,
+        originalTitle: nfo ? nfo.originalTitle : null,
+        year: nfo ? nfo.year : null,
+        rating: nfo ? nfo.rating : null,
+        votes: nfo ? nfo.votes : null,
+        mpaa: nfo ? nfo.mpaa : null,
+        runtime: duration,
+        plot: nfo ? nfo.plot : null,
+        tagline: nfo ? nfo.tagline : null,
+        genres: nfo ? nfo.genres : [],
+        studio: nfo ? nfo.studio : null,
+        director: nfo ? nfo.director : null,
+        actors: nfo ? nfo.actors : [],
+        trailer: nfo ? nfo.trailer : null,
+
+        // Artwork (API paths)
+        poster,
+        fanart,
+        thumb,
+        hasPoster: !!artwork.poster,
+        hasFanart: !!artwork.fanart,
+        hasThumb: !!artwork.thumb,
+
+        // TV Show Grouping
+        type,
+        showTitle,
+        showPoster: showPosterExists ? `/api/artwork/${id}/showPoster` : null,
+        showFanart: showFanartExists ? `/api/artwork/${id}/showFanart` : null,
+        season,
+        episode,
+        episodeTitle,
+        airDate,
+
+        // Metadata tracking
+        metadataSource: nfo ? "nfo" : "filename",
+        hasRichMetadata: !!nfo,
+
+        // Core fields
+        category: parsedMeta.category,
+        subcategory: parsedMeta.subcategory,
+        showName: parsedMeta.showName,
+        seasonName: parsedMeta.seasonName,
+        duration,
         hasSubtitles,
-        ...parsedMeta,
+        thumbnail: `/api/thumbnail/${id}`,
+        nfoMtime,
       };
     } catch (err: any) {
       console.error(`⚠️ Failed to scan movie file ${file}:`, err.message || err);
@@ -660,7 +811,13 @@ async function scanAllLibraries() {
   savePersistentCache();
 
   const durationMs = Date.now() - startTime;
-  console.log(`Scan completed in ${durationMs}ms! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}`);
+  const movies = moviesCache.filter(m => m.type === "movie" || m.type === "video");
+  const episodes = moviesCache.filter(m => m.type === "episode");
+  const moviesWithNfo = movies.filter(m => m.hasRichMetadata).length;
+  const moviesWithPoster = movies.filter(m => m.hasPoster).length;
+  const distinctShows = new Set(episodes.map(e => e.showTitle).filter(Boolean)).size;
+
+  console.log(`Scan completed in ${durationMs}ms! Scan complete: ${movies.length} movies (${moviesWithNfo} with rich NFO metadata, ${moviesWithPoster} with posters), ${episodes.length} TV episodes across ${distinctShows} shows`);
 }
 
 // Throttled scan execution guard to prevent overlapping concurrent scans
@@ -1157,10 +1314,22 @@ app.get("/api/show-poster/:showName", (req, res) => {
     try {
       const files = fs.readdirSync(showFolder);
       const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-      const imageFile = files.find((f) => {
+      
+      // Prioritize files named exactly "poster" or "folder" (case-insensitive)
+      let imageFile = files.find((f) => {
         const ext = path.extname(f).toLowerCase();
-        return imageExtensions.includes(ext);
+        if (!imageExtensions.includes(ext)) return false;
+        const base = path.basename(f, ext).toLowerCase();
+        return base === "poster" || base === "folder";
       });
+
+      // Fallback to any image if no specific poster or folder found
+      if (!imageFile) {
+        imageFile = files.find((f) => {
+          const ext = path.extname(f).toLowerCase();
+          return imageExtensions.includes(ext);
+        });
+      }
 
       if (imageFile) {
         const fullImagePath = path.join(showFolder, imageFile);
@@ -1194,6 +1363,251 @@ app.get("/api/show-poster/:showName", (req, res) => {
 
   res.setHeader("Content-Type", "image/gif");
   return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/artwork/:id/:type
+app.get("/api/artwork/:id/:type", (req, res) => {
+  const id = req.params.id;
+  const type = req.params.type; // poster, fanart, thumb, showPoster, showFanart
+  const filepath = moviesIndex.get(id);
+
+  if (!filepath) {
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+
+  const artwork = findArtwork(filepath);
+
+  const streamImageIfExists = (imgPatch: string | null | undefined): boolean => {
+    if (imgPatch && fs.existsSync(imgPatch)) {
+      res.setHeader("Content-Type", getMimeType(path.extname(imgPatch)));
+      fs.createReadStream(imgPatch).pipe(res);
+      return true;
+    }
+    return false;
+  };
+
+  if (type === "poster") {
+    if (streamImageIfExists(artwork.poster)) return;
+    if (streamImageIfExists(artwork.thumb)) return;
+    return res.redirect(`/api/thumbnail/${id}`);
+  }
+
+  if (type === "fanart") {
+    if (streamImageIfExists(artwork.fanart)) return;
+    if (streamImageIfExists(artwork.poster)) return;
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+
+  if (type === "thumb") {
+    if (streamImageIfExists(artwork.thumb)) return;
+    return res.redirect(`/api/thumbnail/${id}`);
+  }
+
+  if (type === "showPoster") {
+    const dir = path.dirname(filepath);
+    let showDir = dir;
+    if (!fs.existsSync(path.join(dir, "tvshow.nfo")) && fs.existsSync(path.join(path.dirname(dir), "tvshow.nfo"))) {
+      showDir = path.dirname(dir);
+    }
+    
+    let posterPath: string | null = null;
+    if (fs.existsSync(showDir)) {
+      try {
+        const files = fs.readdirSync(showDir);
+        const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+        const found = files.find((f) => {
+          const ext = path.extname(f).toLowerCase();
+          if (!imageExtensions.includes(ext)) return false;
+          const base = path.basename(f, ext).toLowerCase();
+          return base === "poster" || base === "folder";
+        });
+        if (found) {
+          posterPath = path.join(showDir, found);
+        }
+      } catch (err) {
+        console.error("Error reading show directory for artwork:", err);
+      }
+    }
+
+    if (streamImageIfExists(posterPath)) return;
+    if (streamImageIfExists(artwork.poster)) return;
+    return res.redirect(`/api/thumbnail/${id}`);
+  }
+
+  if (type === "showFanart") {
+    const dir = path.dirname(filepath);
+    let showDir = dir;
+    if (!fs.existsSync(path.join(dir, "tvshow.nfo")) && fs.existsSync(path.join(path.dirname(dir), "tvshow.nfo"))) {
+      showDir = path.dirname(dir);
+    }
+    
+    let fanartPath: string | null = null;
+    if (fs.existsSync(showDir)) {
+      try {
+        const files = fs.readdirSync(showDir);
+        const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+        const found = files.find((f) => {
+          const ext = path.extname(f).toLowerCase();
+          if (!imageExtensions.includes(ext)) return false;
+          const base = path.basename(f, ext).toLowerCase();
+          return base === "fanart" || base === "background";
+        });
+        if (found) {
+          fanartPath = path.join(showDir, found);
+        }
+      } catch (err) {
+        console.error("Error reading show directory for fanart:", err);
+      }
+    }
+
+    if (streamImageIfExists(fanartPath)) return;
+    if (streamImageIfExists(artwork.fanart)) return;
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/shows
+app.get("/api/shows", (req, res) => {
+  const episodes = moviesCache.filter(m => m.type === "episode");
+  
+  const showMap = new Map<string, typeof episodes>();
+  episodes.forEach(ep => {
+    const title = ep.showTitle || "Unknown Show";
+    if (!showMap.has(title)) {
+      showMap.set(title, []);
+    }
+    showMap.get(title)!.push(ep);
+  });
+
+  const showsList = Array.from(showMap.entries()).map(([showTitle, eps]) => {
+    eps.sort((a, b) => {
+      const sA = a.season ?? 999;
+      const sB = b.season ?? 999;
+      if (sA !== sB) return sA - sB;
+      const eA = a.episode ?? 999;
+      const eB = b.episode ?? 999;
+      return eA - eB;
+    });
+
+    const firstEp = eps[0];
+    const seasons = new Set(eps.map(e => e.season).filter(s => s !== null && s !== undefined));
+    const seasonsCount = seasons.size;
+
+    const genresSet = new Set<string>();
+    eps.forEach(e => {
+      if (e.genres) {
+        e.genres.forEach((g: string) => genresSet.add(g));
+      }
+    });
+
+    let plot = firstEp.plot;
+    let rating = firstEp.rating;
+    let studio = firstEp.studio;
+    let year = firstEp.year;
+
+    const fileFullPath = moviesIndex.get(firstEp.id);
+    if (fileFullPath) {
+      const tvShowNfoPath = findTvShowNfo(fileFullPath);
+      if (tvShowNfoPath) {
+        const showNfo = parseTvShowNfo(tvShowNfoPath);
+        if (showNfo) {
+          if (showNfo.plot) plot = showNfo.plot;
+          if (showNfo.rating) rating = showNfo.rating;
+          if (showNfo.studio) studio = showNfo.studio;
+          if (showNfo.year) year = showNfo.year;
+          if (showNfo.genres && showNfo.genres.length > 0) {
+            showNfo.genres.forEach(g => genresSet.add(g));
+          }
+        }
+      }
+    }
+
+    function findTvShowNfo(videoFilePath: string): string | null {
+      const dir = path.dirname(videoFilePath);
+      const parentNfo = path.join(dir, "tvshow.nfo");
+      if (fs.existsSync(parentNfo)) return parentNfo;
+      const gpDir = path.dirname(dir);
+      if (gpDir && gpDir !== dir) {
+        const gpNfo = path.join(gpDir, "tvshow.nfo");
+        if (fs.existsSync(gpNfo)) return gpNfo;
+      }
+      return null;
+    }
+
+    return {
+      showTitle,
+      poster: firstEp.showPoster || firstEp.poster || `/api/artwork/${firstEp.id}/showPoster`,
+      fanart: firstEp.showFanart || firstEp.fanart || `/api/artwork/${firstEp.id}/showFanart`,
+      seasonsCount: seasonsCount || 1,
+      episodesCount: eps.length,
+      genres: Array.from(genresSet),
+      plot,
+      rating,
+      studio,
+      year,
+      episodes: eps
+    };
+  });
+
+  showsList.sort((a, b) => a.showTitle.localeCompare(b.showTitle));
+  res.json(showsList);
+});
+
+// GET /api/library/health
+app.get("/api/library/health", (req, res) => {
+  const movies = moviesCache.filter(m => m.type !== "episode");
+  const episodes = moviesCache.filter(m => m.type === "episode");
+  const distinctShowsTitles = new Set(episodes.map(e => e.showTitle).filter(Boolean));
+
+  const totalMovies = movies.length;
+  const moviesWithNfoCount = movies.filter(m => m.hasRichMetadata).length;
+  const moviesWithPosterCount = movies.filter(m => m.hasPoster).length;
+  const moviesWithFanartCount = movies.filter(m => m.hasFanart).length;
+
+  const totalEpisodes = episodes.length;
+  const episodesWithNfoCount = episodes.filter(m => m.hasRichMetadata).length;
+  const episodesWithThumbCount = episodes.filter(m => m.hasThumb).length;
+
+  const totalShows = distinctShowsTitles.size;
+
+  function checkShowNfo(filepath: string): boolean {
+    const dir = path.dirname(filepath);
+    if (fs.existsSync(path.join(dir, "tvshow.nfo"))) return true;
+    const gpDir = path.dirname(dir);
+    if (gpDir && gpDir !== dir && fs.existsSync(path.join(gpDir, "tvshow.nfo"))) return true;
+    return false;
+  }
+
+  const showsWithNfoCount = Array.from(distinctShowsTitles).filter(showTitle => {
+    const showEps = episodes.filter(e => e.showTitle === showTitle);
+    return showEps.some(e => {
+      const fileFullPath = moviesIndex.get(e.id);
+      return fileFullPath ? checkShowNfo(fileFullPath) : false;
+    });
+  }).length;
+
+  const calcPct = (count: number, total: number) => {
+    if (total === 0) return 0;
+    return Math.round((count / total) * 100);
+  };
+
+  res.json({
+    totalMovies,
+    moviesWithNfo: calcPct(moviesWithNfoCount, totalMovies),
+    moviesWithPoster: calcPct(moviesWithPosterCount, totalMovies),
+    moviesWithFanart: calcPct(moviesWithFanartCount, totalMovies),
+    totalEpisodes,
+    episodesWithNfo: calcPct(episodesWithNfoCount, totalEpisodes),
+    episodesWithThumb: calcPct(episodesWithThumbCount, totalEpisodes),
+    totalShows,
+    showsWithNfo: calcPct(showsWithNfoCount, totalShows)
+  });
 });
 
 // 4. GET /api/thumbnail/:id

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import MovieCard from "../components/MovieCard";
+import MovieDetailModal from "../components/MovieDetailModal";
 import { 
   Film, Tv, Shield, Folder, Play, Clock, HardDrive, 
   ChevronRight, RefreshCw, X, Clapperboard, Video
@@ -16,6 +17,7 @@ export default function Movies() {
   const [activeCategory, setActiveCategory] = useState<CategoryType>("all");
   const [selectedShow, setSelectedShow] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>("Season 1");
+  const [activeDetailMovie, setActiveDetailMovie] = useState<Movie | null>(null);
 
   // Helper to compute episode progress
   const getEpisodeProgress = (episodeId: string) => {
@@ -267,7 +269,7 @@ export default function Movies() {
                     className="group relative bg-cinema-card rounded-xl overflow-hidden border border-cinema-border cursor-pointer flex flex-col movie-card-hover"
                     id={`series-card-${show.name.replace(/\s+/g, "-")}`}
                   >
-                    <div className="relative aspect-[16/9] w-full overflow-hidden bg-black/40">
+                    <div className="relative aspect-[2/3] w-full overflow-hidden bg-black/40">
                       <img
                         src={`/api/show-poster/${encodeURIComponent(show.name)}?firstEpisodeId=${firstEpisode?.id || ""}`}
                         alt={show.name}
@@ -307,7 +309,13 @@ export default function Movies() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
               {filteredContent.moviesList.map((movie) => {
                 const CardItem = MovieCard as any;
-                return <CardItem key={movie.id} movie={movie} />;
+                return (
+                  <CardItem 
+                    key={movie.id} 
+                    movie={movie} 
+                    onClick={() => setActiveDetailMovie(movie)}
+                  />
+                );
               })}
             </div>
           </section>
@@ -325,7 +333,13 @@ export default function Movies() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                 {videoList.map((video) => {
                   const CardItem = MovieCard as any;
-                  return <CardItem key={video.id} movie={video} />;
+                  return (
+                    <CardItem 
+                      key={video.id} 
+                      movie={video} 
+                      onClick={() => setActiveDetailMovie(video)}
+                    />
+                  );
                 })}
               </div>
             </section>
@@ -478,6 +492,12 @@ export default function Movies() {
             </div>
           </div>
         </div>
+      )}
+      {activeDetailMovie && (
+        <MovieDetailModal 
+          movie={activeDetailMovie} 
+          onClose={() => setActiveDetailMovie(null)} 
+        />
       )}
     </div>
   );

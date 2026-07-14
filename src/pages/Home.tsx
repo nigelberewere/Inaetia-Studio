@@ -2,10 +2,13 @@ import React from "react";
 import { useApp } from "../context/AppContext";
 import Hero from "../components/Hero";
 import MovieCard from "../components/MovieCard";
+import MovieDetailModal from "../components/MovieDetailModal";
 import { Flame, Film, Disc, Clock } from "lucide-react";
+import { Movie } from "../types";
 
 export default function Home() {
   const { movies, loading, error, continueWatching } = useApp();
+  const [activeDetailMovie, setActiveDetailMovie] = React.useState<Movie | null>(null);
 
   // Pick up to 6 featured movies dynamically using a scoring algorithm
   const featuredMovies = React.useMemo(() => {
@@ -108,9 +111,14 @@ export default function Home() {
             {continueWatching.map((item) => {
               if (!item.movie) return null;
               const pct = (item.position / item.duration) * 100;
+              const isPortrait = item.movie.type === "movie" || item.movie.hasPoster;
               return (
-                <div key={item.movieId} className="w-[240px] sm:w-[280px] shrink-0">
-                  <MovieCard movie={item.movie} progress={pct} />
+                <div key={item.movieId} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                  <MovieCard 
+                    movie={item.movie} 
+                    progress={pct} 
+                    onClick={() => setActiveDetailMovie(item.movie)} 
+                  />
                 </div>
               );
             })}
@@ -126,11 +134,17 @@ export default function Home() {
             <h2 className="text-lg md:text-xl font-extrabold tracking-tight text-white uppercase">Recently Added</h2>
           </div>
           <div className="horizontal-scroll">
-            {recentlyAdded.map((movie) => (
-              <div key={movie.id} className="w-[240px] sm:w-[280px] shrink-0">
-                <MovieCard movie={movie} />
-              </div>
-            ))}
+            {recentlyAdded.map((movie) => {
+              const isPortrait = movie.type === "movie" || movie.hasPoster;
+              return (
+                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                  <MovieCard 
+                    movie={movie} 
+                    onClick={() => setActiveDetailMovie(movie)} 
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -144,8 +158,11 @@ export default function Home() {
           </div>
           <div className="horizontal-scroll">
             {allMovies.map((movie) => (
-              <div key={movie.id} className="w-[240px] sm:w-[280px] shrink-0">
-                <MovieCard movie={movie} />
+              <div key={movie.id} className="w-[150px] sm:w-[190px] shrink-0">
+                <MovieCard 
+                  movie={movie} 
+                  onClick={() => setActiveDetailMovie(movie)} 
+                />
               </div>
             ))}
           </div>
@@ -161,13 +178,25 @@ export default function Home() {
             <h2 className="text-lg md:text-xl font-extrabold tracking-tight text-white uppercase">Large High-Definition Files</h2>
           </div>
           <div className="horizontal-scroll">
-            {largeFiles.map((movie) => (
-              <div key={movie.id} className="w-[240px] sm:w-[280px] shrink-0">
-                <MovieCard movie={movie} />
-              </div>
-            ))}
+            {largeFiles.map((movie) => {
+              const isPortrait = movie.type === "movie" || movie.hasPoster;
+              return (
+                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                  <MovieCard 
+                    movie={movie} 
+                    onClick={() => setActiveDetailMovie(movie)} 
+                  />
+                </div>
+              );
+            })}
           </div>
         </section>
+      )}
+      {activeDetailMovie && (
+        <MovieDetailModal 
+          movie={activeDetailMovie} 
+          onClose={() => setActiveDetailMovie(null)} 
+        />
       )}
     </div>
   );

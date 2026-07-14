@@ -3,8 +3,23 @@ import { useApp } from "../context/AppContext";
 import { safeFetch } from "../utils";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
-  Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image
+  Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image,
+  HeartPulse, ShieldCheck, Activity, Sparkles
 } from "lucide-react";
+
+interface LibraryHealth {
+  totalItems: number;
+  nfoCount: number;
+  nfoCoverage: number;
+  posterCount: number;
+  posterCoverage: number;
+  fanartCount: number;
+  fanartCoverage: number;
+  thumbCount: number;
+  thumbCoverage: number;
+  richMetadataCount: number;
+  richMetadataCoverage: number;
+}
 
 export default function Settings() {
   const { status, fetchStatus, triggerRescan, loading, movies } = useApp();
@@ -12,11 +27,32 @@ export default function Settings() {
   const [clearingThumbs, setClearingThumbs] = useState(false);
   const [confirmClearThumbs, setConfirmClearThumbs] = useState(false);
   const [thumbsClearedMessage, setThumbsClearedMessage] = useState("");
+  const [health, setHealth] = useState<LibraryHealth | null>(null);
+  const [fetchingHealth, setFetchingHealth] = useState(false);
+
+  const fetchHealth = async () => {
+    setFetchingHealth(true);
+    try {
+      const res = await safeFetch("/api/library/health");
+      if (res.ok) {
+        const data = await res.json();
+        setHealth(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch library health:", err);
+    } finally {
+      setFetchingHealth(false);
+    }
+  };
 
   useEffect(() => {
     fetchStatus();
+    fetchHealth();
     // Refresh stats every 10 seconds while on settings page
-    const interval = setInterval(fetchStatus, 10000);
+    const interval = setInterval(() => {
+      fetchStatus();
+      fetchHealth();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,6 +86,7 @@ export default function Settings() {
     setRescanning(true);
     try {
       await triggerRescan();
+      await fetchHealth();
     } catch (err) {
       console.error(err);
     } finally {
@@ -258,6 +295,130 @@ export default function Settings() {
             <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPad/iPhone Safari, Android Chrome, Smart TV</p>
           </div>
         </div>
+      </div>
+
+      {/* 4. TMM LIBRARY HEALTH DASHBOARD */}
+      <div className="bg-cinema-card border border-cinema-border rounded-2xl p-6 shadow-xl space-y-6" id="tmm-health-dashboard">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cinema-border pb-3">
+          <div className="flex items-center gap-2">
+            <HeartPulse className="w-5 h-5 text-cinema-amber animate-pulse" />
+            <h2 className="font-bold text-white text-base">Metadata & Artwork Health Dashboard</h2>
+          </div>
+          <span className="text-[11px] font-mono text-cinema-muted">
+            Powered by Tiny Media Manager (TMM) Integration
+          </span>
+        </div>
+
+        {health ? (
+          <div className="space-y-6">
+            {/* Summary Banner */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+              <div className="bg-white/[0.02] border border-cinema-border rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-cinema-muted text-[10px] font-bold uppercase tracking-wider">Total Video Files</span>
+                <span className="text-xl font-black text-white mt-1 font-mono">{health.totalItems}</span>
+              </div>
+              <div className="bg-white/[0.02] border border-cinema-border rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-cinema-muted text-[10px] font-bold uppercase tracking-wider">NFO Metadata</span>
+                <span className="text-xl font-black text-white mt-1 font-mono">{health.nfoCount} ({Math.round(health.nfoCoverage)}%)</span>
+              </div>
+              <div className="bg-white/[0.02] border border-cinema-border rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-cinema-muted text-[10px] font-bold uppercase tracking-wider">Portrait Posters</span>
+                <span className="text-xl font-black text-white mt-1 font-mono">{health.posterCount} ({Math.round(health.posterCoverage)}%)</span>
+              </div>
+              <div className="bg-white/[0.02] border border-cinema-border rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-cinema-muted text-[10px] font-bold uppercase tracking-wider">Fanart Backdrops</span>
+                <span className="text-xl font-black text-white mt-1 font-mono">{health.fanartCount} ({Math.round(health.fanartCoverage)}%)</span>
+              </div>
+              <div className="bg-white/[0.02] border border-cinema-border rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                <span className="text-cinema-muted text-[10px] font-bold uppercase tracking-wider">Rich Descriptions</span>
+                <span className="text-xl font-black text-white mt-1 font-mono">{health.richMetadataCount} ({Math.round(health.richMetadataCoverage)}%)</span>
+              </div>
+            </div>
+
+            {/* Coverage Progress Bars */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div className="space-y-4">
+                {/* NFO */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="flex items-center gap-1.5 text-white font-medium">
+                      <ShieldCheck className="w-4 h-4 text-cinema-amber" />
+                      NFO Metadata Coverage
+                    </span>
+                    <span className="font-bold text-cinema-amber font-mono">{Math.round(health.nfoCoverage)}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                    <div className="bg-cinema-amber h-full rounded-full" style={{ width: `${health.nfoCoverage}%` }} />
+                  </div>
+                  <p className="text-[10px] text-cinema-muted">
+                    NFO files provide structured details like actors, ratings, and studio info.
+                  </p>
+                </div>
+
+                {/* Posters */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="flex items-center gap-1.5 text-white font-medium">
+                      <Image className="w-4 h-4 text-cinema-amber" />
+                      Portrait Poster Coverage (2:3 Aspect)
+                    </span>
+                    <span className="font-bold text-cinema-amber font-mono">{Math.round(health.posterCoverage)}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                    <div className="bg-cinema-amber h-full rounded-full" style={{ width: `${health.posterCoverage}%` }} />
+                  </div>
+                  <p className="text-[10px] text-cinema-muted">
+                    Standardized portrait artwork files used for movie and TV series listing grids.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Fanarts */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="flex items-center gap-1.5 text-white font-medium">
+                      <Sparkles className="w-4 h-4 text-cinema-amber" />
+                      Scenic Fanart Backgrounds
+                    </span>
+                    <span className="font-bold text-cinema-amber font-mono">{Math.round(health.fanartCoverage)}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                    <div className="bg-cinema-amber h-full rounded-full" style={{ width: `${health.fanartCoverage}%` }} />
+                  </div>
+                  <p className="text-[10px] text-cinema-muted">
+                    Wide background backdrops loaded on the detailed immersive movie models.
+                  </p>
+                </div>
+
+                {/* Rich TMM Descriptions */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="flex items-center gap-1.5 text-white font-medium">
+                      <Activity className="w-4 h-4 text-cinema-amber" />
+                      Rich Content (Plot + Genres + Studio)
+                    </span>
+                    <span className="font-bold text-cinema-amber font-mono">{Math.round(health.richMetadataCoverage)}%</span>
+                  </div>
+                  <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                    <div className="bg-cinema-amber h-full rounded-full" style={{ width: `${health.richMetadataCoverage}%` }} />
+                  </div>
+                  <p className="text-[10px] text-cinema-muted">
+                    Ensures your videos contain complete synopsis descriptions and category tags.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-cinema-muted leading-relaxed bg-white/[0.01] border border-cinema-border rounded-xl p-4 mt-2">
+              💡 <span className="text-white font-semibold">Pro Tip:</span> Save your movies and TV series inside their own dedicated directories (e.g. <code className="text-cinema-amber">/mnt/storage/Videos/Movies/The Dark Knight/</code>) and let <span className="font-semibold text-white">Tiny Media Manager (TMM)</span> fetch metadata. Once saved alongside each file, hit <span className="text-white font-semibold">Rescan Media Library</span> above to load beautiful IMAX-quality covers and details!
+            </p>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-cinema-muted text-xs animate-pulse">
+            Syncing metadata health dashboard stats...
+          </div>
+        )}
       </div>
     </div>
   );
