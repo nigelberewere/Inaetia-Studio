@@ -1598,6 +1598,20 @@ app.get("/api/library/health", (req, res) => {
   };
 
   res.json({
+    // Fields expected by LibraryHealth interface in Settings.tsx
+    totalItems: totalMovies + totalEpisodes,
+    nfoCount: moviesWithNfoCount + episodesWithNfoCount,
+    nfoCoverage: calcPct(moviesWithNfoCount + episodesWithNfoCount, totalMovies + totalEpisodes),
+    posterCount: moviesWithPosterCount,
+    posterCoverage: calcPct(moviesWithPosterCount, totalMovies),
+    fanartCount: moviesWithFanartCount,
+    fanartCoverage: calcPct(moviesWithFanartCount, totalMovies),
+    thumbCount: episodesWithThumbCount,
+    thumbCoverage: calcPct(episodesWithThumbCount, totalEpisodes),
+    richMetadataCount: moviesWithNfoCount + episodesWithNfoCount,
+    richMetadataCoverage: calcPct(moviesWithNfoCount + episodesWithNfoCount, totalMovies + totalEpisodes),
+
+    // Backward compatibility fields
     totalMovies,
     moviesWithNfo: calcPct(moviesWithNfoCount, totalMovies),
     moviesWithPoster: calcPct(moviesWithPosterCount, totalMovies),
