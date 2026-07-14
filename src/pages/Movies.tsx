@@ -30,7 +30,16 @@ export default function Movies() {
 
   // Group all episodes into unique TV Shows
   const shows = useMemo(() => {
-    const showMap = new Map<string, { name: string; episodes: Movie[]; category: string }>();
+    const showMap = new Map<string, { 
+      name: string; 
+      episodes: Movie[]; 
+      category: string;
+      plot?: string | null;
+      year?: number | null;
+      rating?: number | null;
+      genres?: string[];
+      studio?: string | null;
+    }>();
     
     movies.forEach((m) => {
       if (m.type === "episode" && m.showName) {
@@ -38,7 +47,12 @@ export default function Movies() {
           showMap.set(m.showName, {
             name: m.showName,
             episodes: [],
-            category: m.category || "Tv Shows"
+            category: m.category || "Tv Shows",
+            plot: m.showPlot,
+            year: m.showYear,
+            rating: m.showRating,
+            genres: m.showGenres,
+            studio: m.showStudio
           });
         }
         showMap.get(m.showName)!.episodes.push(m);
@@ -96,7 +110,12 @@ export default function Movies() {
       category: show.category,
       seasons: sortedSeasons,
       episodesBySeason: seasonMap,
-      totalEpisodes: show.episodes.length
+      totalEpisodes: show.episodes.length,
+      plot: show.plot,
+      year: show.year,
+      rating: show.rating,
+      genres: show.genres,
+      studio: show.studio
     };
   }, [selectedShow, shows]);
 
@@ -386,16 +405,43 @@ export default function Movies() {
                 <X className="w-4 sm:w-5 sm:h-5 h-4" />
               </button>
 
-              <div className="space-y-1">
+              <div className="space-y-1.5 max-w-3xl">
                 <span className="text-[10px] sm:text-xs font-bold text-cinema-amber uppercase tracking-wider bg-cinema-amber/10 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-cinema-amber/20">
                   TV Series
                 </span>
                 <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white drop-shadow-md mt-1.5 sm:mt-2">
                   {showDetails.name}
                 </h2>
-                <p className="text-[10px] sm:text-xs md:text-sm text-cinema-muted">
-                  {showDetails.totalEpisodes} episodes available • Sorted sequentially
-                </p>
+                
+                {/* TV Show Metadata Badges */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinema-muted font-medium mt-1">
+                  {showDetails.year && (
+                    <span className="text-white font-semibold">{showDetails.year}</span>
+                  )}
+                  {showDetails.rating && (
+                    <span className="flex items-center gap-0.5 text-cinema-amber">
+                      ⭐ {Number(showDetails.rating).toFixed(1)}
+                    </span>
+                  )}
+                  {showDetails.studio && (
+                    <span className="px-1.5 py-0.2 bg-zinc-800 rounded text-zinc-300 font-bold uppercase text-[9px]">
+                      {showDetails.studio}
+                    </span>
+                  )}
+                  {showDetails.genres && showDetails.genres.length > 0 && (
+                    <span>• {showDetails.genres.join(", ")}</span>
+                  )}
+                </div>
+
+                {showDetails.plot ? (
+                  <p className="text-xs sm:text-sm text-zinc-300 mt-2 line-clamp-2 md:line-clamp-3 bg-black/50 backdrop-blur-sm p-2 sm:p-3 rounded-lg leading-relaxed shadow-inner">
+                    {showDetails.plot}
+                  </p>
+                ) : (
+                  <p className="text-[10px] sm:text-xs md:text-sm text-cinema-muted">
+                    {showDetails.totalEpisodes} episodes available • Sorted sequentially
+                  </p>
+                )}
               </div>
             </div>
 
@@ -473,6 +519,12 @@ export default function Movies() {
                         <p className="text-xs text-cinema-muted truncate mt-1 leading-relaxed">
                           {episode.filename}
                         </p>
+
+                        {episode.plot && (
+                          <p className="text-xs text-zinc-400 line-clamp-2 mt-1.5 leading-relaxed max-w-3xl">
+                            {episode.plot}
+                          </p>
+                        )}
 
                         <div className="flex items-center gap-4 text-xs text-cinema-muted mt-3 font-medium">
                           <span className="flex items-center gap-1">

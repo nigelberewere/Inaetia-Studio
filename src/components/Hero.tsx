@@ -55,6 +55,7 @@ export default function Hero({ movies = [], movie }: HeroProps) {
   }
 
   const activeMovie = list[currentIndex];
+  const backdropImg = activeMovie.fanart || activeMovie.thumbnail;
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -82,20 +83,21 @@ export default function Hero({ movies = [], movie }: HeroProps) {
           transition={{ duration: 0.6, ease: "easeInOut" }}
           className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 md:p-12 z-10"
         >
-          {/* Background Cinematic Artwork Thumbnail (Blurred) & Dominant Gradient Overlays */}
-          <div className="absolute inset-0 z-0 overflow-hidden">
+          {/* Background Cinematic Artwork Fanart/Backdrop & Dominant Gradient Overlays */}
+          <div className="absolute inset-0 z-0 overflow-hidden bg-[#0a0a0f]">
             <motion.img
+              key={backdropImg}
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.3 }}
-              transition={{ duration: 0.5 }}
-              src={activeMovie.thumbnail}
+              animate={{ opacity: 0.65 }}
+              transition={{ duration: 0.8 }}
+              src={backdropImg}
               alt=""
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover filter blur-sm"
+              className="w-full h-full object-cover scale-100 group-hover:scale-[1.02] transition-transform duration-[8000ms] ease-out"
             />
             {/* Master Dark/Color Gradient overlays for cinema mood */}
-            <div className="absolute inset-0 bg-gradient-to-t from-cinema-bg via-cinema-bg/85 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-cinema-bg via-cinema-bg/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-cinema-bg via-cinema-bg/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-cinema-bg via-cinema-bg/65 to-transparent" />
           </div>
 
           {/* Hero Content Panel */}

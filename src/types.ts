@@ -46,6 +46,11 @@ export interface Movie {
   season?: number | null;
   episode?: number | null;
   airDate?: string | null;
+  showPlot?: string | null;
+  showYear?: number | null;
+  showRating?: number | null;
+  showGenres?: string[];
+  showStudio?: string | null;
 
   // Metadata source tracking
   metadataSource?: "nfo" | "filename";

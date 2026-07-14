@@ -610,6 +610,11 @@ async function scanAllLibraries() {
 
       let showPosterExists = false;
       let showFanartExists = false;
+      let showPlot: string | null = null;
+      let showYear: number | null = null;
+      let showRating: number | null = null;
+      let showGenres: string[] = [];
+      let showStudio: string | null = null;
 
       // Find and check show folder
       function findTvShowNfo(videoFilePath: string): string | null {
@@ -627,8 +632,15 @@ async function scanAllLibraries() {
       if (isTvShow) {
         if (tvShowNfoPath) {
           const parsedShow = parseTvShowNfo(tvShowNfoPath);
-          if (parsedShow && parsedShow.title) {
-            showTitle = parsedShow.title;
+          if (parsedShow) {
+            if (parsedShow.title) {
+              showTitle = parsedShow.title;
+            }
+            showPlot = parsedShow.plot;
+            showYear = parsedShow.year;
+            showRating = parsedShow.rating;
+            showGenres = parsedShow.genres;
+            showStudio = parsedShow.studio;
           }
           const showDir = path.dirname(tvShowNfoPath);
           if (fs.existsSync(showDir)) {
@@ -718,6 +730,11 @@ async function scanAllLibraries() {
         episode,
         episodeTitle,
         airDate,
+        showPlot,
+        showYear,
+        showRating,
+        showGenres,
+        showStudio,
 
         // Metadata tracking
         metadataSource: nfo ? "nfo" : "filename",
@@ -1178,23 +1195,44 @@ app.get("/api/stream/:id", (req, res) => {
       });
     }
 
-    // Serve remuxed MP4 stream
+    const movie = moviesCache.find((m) => m.id === id);
+    const totalSize = movie && movie.size ? movie.size : 1000 * 1024 * 1024; // fallback 1GB
+
+    let startByte = 0;
+    let isProbe = false;
+    if (req.headers.range) {
+      const parts = req.headers.range.replace(/bytes=/, "").split("-");
+      startByte = parseInt(parts[0], 10);
+      const endByte = parts[1] ? parseInt(parts[1], 10) : null;
+      if (startByte === 0 && endByte === 1) {
+        isProbe = true;
+      }
+    }
+
+    if (isProbe) {
+      res.status(206);
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Content-Range", `bytes 0-1/${totalSize}`);
+      res.setHeader("Content-Length", "2");
+      res.send(Buffer.from([0x00, 0x00]));
+      return;
+    }
+
+    res.status(206);
     res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Content-Range", `bytes ${startByte}-${totalSize - 1}/${totalSize}`);
+    res.setHeader("Content-Length", totalSize - startByte);
 
     activeRemuxCount++;
 
     // Optional Seeking support using -ss
     let startSeconds = 0;
-    const movie = moviesCache.find((m) => m.id === id);
-    if (req.headers.range && movie && movie.duration && movie.size && movie.size > 0) {
-      const parts = req.headers.range.replace(/bytes=/, "").split("-");
-      const startByte = parseInt(parts[0], 10);
-      if (!isNaN(startByte) && startByte > 500000) {
-        const ratio = startByte / movie.size;
-        startSeconds = Math.floor(ratio * movie.duration);
-        console.log(`[REMUX] Range request received: ${req.headers.range}. Seeking to ${startSeconds}s (Ratio: ${(ratio * 100).toFixed(1)}%)`);
-      }
+    if (movie && movie.duration && movie.size && movie.size > 0 && startByte > 500000) {
+      const ratio = startByte / movie.size;
+      startSeconds = Math.floor(ratio * movie.duration);
+      console.log(`[REMUX] Range request received: ${req.headers.range}. Seeking to ${startSeconds}s (Ratio: ${(ratio * 100).toFixed(1)}%)`);
     }
 
     const ffmpegArgs: string[] = [];
