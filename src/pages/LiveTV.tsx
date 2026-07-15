@@ -670,8 +670,8 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
     timelineBlocks.push(time);
   }
 
-  // Calculate EPG cell width (minutes * 3px, meaning 30m = 90px)
-  const MINUTE_WIDTH = 3.5;
+  // Calculate EPG cell width (minutes * 4.5px, meaning 30m = 135px for robust readability)
+  const MINUTE_WIDTH = 4.5;
 
   if (loading) {
     return (
@@ -763,37 +763,73 @@ function EPGView({ channels, onSelectChannel }: EPGViewProps) {
                         const start = new Date(item.startTime).getTime();
                         const end = new Date(item.endTime).getTime();
                         const durMins = Math.max(2, (end - start) / 60000);
-                        const widthPx = durMins * MINUTE_WIDTH;
+                        const calculatedWidth = durMins * MINUTE_WIDTH;
+                        // Enforce a sensible minimum width of 32px so the item is clickable and doesn't collapse
+                        const widthPx = Math.max(32, calculatedWidth);
 
                         // Check if this program is currently broadcasting "live"
                         const isLiveNow = Date.now() >= start && Date.now() <= end;
+
+                        // Layout configuration based on cell width
+                        const isUltraNarrow = widthPx < 55;
+                        const isMedium = widthPx >= 55 && widthPx < 115;
+
+                        let paddingClass = "p-2.5";
+                        if (isUltraNarrow) {
+                          paddingClass = "p-1";
+                        } else if (isMedium) {
+                          paddingClass = "py-1.5 px-2";
+                        }
 
                         return (
                           <div
                             key={pIdx}
                             onClick={() => onSelectChannel(ch)}
-                            className={`h-full border border-cinema-border/40 hover:border-cinema-amber/60 rounded-lg mx-0.5 p-2.5 flex flex-col justify-between shrink-0 cursor-pointer select-none transition-all ${
+                            className={`group h-full border border-cinema-border/40 hover:border-cinema-amber/60 rounded-lg mx-0.5 flex flex-col justify-between shrink-0 cursor-pointer select-none transition-all overflow-hidden min-w-0 ${paddingClass} ${
                               isLiveNow
                                 ? "bg-cinema-amber/10 border-cinema-amber/40 shadow-[inset_0_0_8px_rgba(217,119,6,0.15)]"
                                 : "bg-black/20 hover:bg-white/5"
                             }`}
                             style={{ width: `${widthPx}px` }}
+                            title={`${item.program.title} (${Math.round(durMins)} mins)`}
                           >
-                            <span className="text-xs font-bold text-white leading-tight truncate block" title={item.program.title}>
-                              {item.program.title}
-                            </span>
-                            <div className="flex items-center gap-1 text-[9px] text-gray-400">
-                              {isLiveNow && (
-                                <span className="text-red-500 font-extrabold flex items-center gap-0.5 animate-pulse mr-1">
-                                  ● LIVE
+                            {isUltraNarrow ? (
+                              <div className="flex items-center justify-center h-full w-full">
+                                {isLiveNow ? (
+                                  <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                                ) : (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-600 group-hover:bg-zinc-400 transition-colors" />
+                                )}
+                              </div>
+                            ) : isMedium ? (
+                              <div className="flex flex-col justify-center h-full w-full min-w-0">
+                                <span className="text-[10px] font-bold text-white leading-snug truncate block min-w-0">
+                                  {isLiveNow && <span className="text-red-500 font-extrabold mr-1">●</span>}
+                                  {item.program.title}
                                 </span>
-                              )}
-                              <span>
-                                {formatTimeSafe(item.startTime)}
-                              </span>
-                              <span>•</span>
-                              <span>{Math.round(durMins)} mins</span>
-                            </div>
+                                <span className="text-[9px] text-gray-400 truncate block">
+                                  {Math.round(durMins)}m
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="text-xs font-bold text-white leading-tight truncate block min-w-0" title={item.program.title}>
+                                  {item.program.title}
+                                </span>
+                                <div className="flex items-center gap-1 text-[9px] text-gray-400 min-w-0 truncate">
+                                  {isLiveNow && (
+                                    <span className="text-red-500 font-extrabold flex items-center gap-0.5 animate-pulse mr-1 shrink-0">
+                                      ● LIVE
+                                    </span>
+                                  )}
+                                  <span className="shrink-0">
+                                    {formatTimeSafe(item.startTime)}
+                                  </span>
+                                  <span className="shrink-0">•</span>
+                                  <span className="truncate">{Math.round(durMins)} mins</span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         );
                       })
