@@ -58,7 +58,7 @@ function MainLayout() {
       <Navbar />
 
       {/* Page Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 md:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 md:py-8 overflow-x-hidden">
         {activeView === "home" && <Home />}
         {activeView === "movies" && <Movies />}
         {activeView === "music" && <Music />}

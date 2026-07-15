@@ -209,7 +209,7 @@ export default function Movies() {
   }
 
   return (
-    <div className="space-y-8 pb-24 animate-fade-in text-white" id="movies-view-page">
+    <div className="space-y-8 pb-24 animate-fade-in text-white w-full max-w-full overflow-x-hidden" id="movies-view-page">
       {/* Category Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cinema-border pb-5">
         <div>

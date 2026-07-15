@@ -162,35 +162,35 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Small screen navigation shortcut buttons - wrapped in a compact pill */}
-        <div className={`items-center gap-0.5 sm:gap-1 bg-cinema-card/40 px-1 py-0.5 rounded-full border border-cinema-border/30 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
+        {/* Small screen navigation shortcut buttons */}
+        <div className={`items-center gap-1.5 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
           <button
             onClick={() => { clearSearch(); setActiveView("movies"); }}
-            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "movies" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "movies" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Movies"
           >
-            <Film className="w-4 h-4" />
+            <Film className="w-5 h-5" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("livetv"); }}
-            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "livetv" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "livetv" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Live TV"
           >
-            <TvIcon className="w-4 h-4" />
+            <TvIcon className="w-5 h-5" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("radio"); }}
-            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "radio" || activeView === "radioguide" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "radio" || activeView === "radioguide" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Radio"
           >
-            <RadioIcon className="w-4 h-4" />
+            <RadioIcon className="w-5 h-5" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("music"); }}
-            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "music" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "music" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Music"
           >
-            <MusicIcon className="w-4 h-4" />
+            <MusicIcon className="w-5 h-5" />
           </button>
         </div>
 
