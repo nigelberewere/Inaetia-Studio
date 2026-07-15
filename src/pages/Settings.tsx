@@ -38,6 +38,7 @@ export default function Settings() {
   const [savingDirs, setSavingDirs] = useState(false);
   const [saveDirsSuccess, setSaveDirsSuccess] = useState("");
   const [saveDirsError, setSaveDirsError] = useState("");
+  const [hasInitializedDirs, setHasInitializedDirs] = useState(false);
 
   const fetchHealth = async () => {
     setFetchingHealth(true);
@@ -67,7 +68,7 @@ export default function Settings() {
 
   // Initialize directory states from status
   useEffect(() => {
-    if (status) {
+    if (status && !hasInitializedDirs) {
       if (status.musicPaths) {
         setMusicPaths(status.musicPaths.split(","));
       } else if (status.musicPath) {
@@ -99,8 +100,9 @@ export default function Settings() {
       } else {
         setOtherVideosPaths(["media/Videos"]);
       }
+      setHasInitializedDirs(true);
     }
-  }, [status]);
+  }, [status, hasInitializedDirs]);
 
   // Format Bytes (B to KB/MB/GB/TB)
   const formatBytes = (bytes: number) => {
@@ -198,6 +200,7 @@ export default function Settings() {
 
       if (res.ok) {
         setSaveDirsSuccess("Media directories updated successfully! Triggered background rescan.");
+        setHasInitializedDirs(false);
         fetchStatus();
         fetchHealth();
         setTimeout(() => setSaveDirsSuccess(""), 6000);
