@@ -235,7 +235,7 @@ export default function Movies() {
       </div>
 
       {/* Directory Category Filters Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none" id="directory-tabs-list">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full max-w-full scrollbar-none" id="directory-tabs-list">
         {(
           [
             { id: "all", label: "All Media", icon: Folder },

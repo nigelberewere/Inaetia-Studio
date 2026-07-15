@@ -132,24 +132,24 @@ export default function Navbar() {
       </div>
 
       {/* Right Tools: Search Bar & Settings & Avatar */}
-      <div className="flex items-center gap-3 sm:gap-4 flex-1 justify-end md:flex-initial">
+      <div className="flex items-center gap-1.5 sm:gap-3 flex-1 justify-end md:flex-initial">
         {/* Search Input Box */}
         <div 
           className={`relative flex items-center rounded-full bg-cinema-card border transition-all duration-300 ${
             isSearchFocused || searchQuery 
-              ? "w-full max-w-[280px] sm:max-w-[320px] border-cinema-amber/40 ring-1 ring-cinema-amber/30" 
-              : "w-40 sm:w-48 border-cinema-border"
+              ? "w-full max-w-[150px] xs:max-w-[200px] sm:max-w-[320px] border-cinema-amber/40 ring-1 ring-cinema-amber/30" 
+              : "w-24 xs:w-32 sm:w-48 border-cinema-border"
           }`}
         >
           <Search className="w-4 h-4 text-cinema-muted ml-3 absolute left-0 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search cinema..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={handleSearchChange}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            className="w-full pl-9 pr-8 py-1.5 bg-transparent text-sm text-cinema-text placeholder-cinema-muted focus:outline-none"
+            className="w-full pl-9 pr-8 py-1.5 bg-transparent text-xs sm:text-sm text-cinema-text placeholder-cinema-muted focus:outline-none"
             id="navbar-search"
           />
           {searchQuery && (
@@ -162,35 +162,35 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Small screen navigation shortcut buttons */}
-        <div className={`items-center gap-1.5 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
+        {/* Small screen navigation shortcut buttons - wrapped in a compact pill */}
+        <div className={`items-center gap-0.5 sm:gap-1 bg-cinema-card/40 px-1 py-0.5 rounded-full border border-cinema-border/30 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
           <button
             onClick={() => { clearSearch(); setActiveView("movies"); }}
-            className={`p-2 rounded-full ${activeView === "movies" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "movies" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Movies"
           >
-            <Film className="w-5 h-5" />
+            <Film className="w-4 h-4" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("livetv"); }}
-            className={`p-2 rounded-full ${activeView === "livetv" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "livetv" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Live TV"
           >
-            <TvIcon className="w-5 h-5" />
+            <TvIcon className="w-4 h-4" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("radio"); }}
-            className={`p-2 rounded-full ${activeView === "radio" || activeView === "radioguide" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "radio" || activeView === "radioguide" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Radio"
           >
-            <RadioIcon className="w-5 h-5" />
+            <RadioIcon className="w-4 h-4" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("music"); }}
-            className={`p-2 rounded-full ${activeView === "music" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            className={`p-1.5 rounded-full transition-all active:scale-90 ${activeView === "music" ? "text-cinema-amber bg-white/10" : "text-cinema-muted hover:text-cinema-text"}`}
             title="Music"
           >
-            <MusicIcon className="w-5 h-5" />
+            <MusicIcon className="w-4 h-4" />
           </button>
         </div>
 

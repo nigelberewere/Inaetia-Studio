@@ -51,7 +51,7 @@ function MainLayout() {
 
   return (
     <div 
-      className="min-h-screen bg-cinema-bg text-cinema-text flex flex-col font-sans selection:bg-cinema-amber selection:text-cinema-bg"
+      className="min-h-screen bg-cinema-bg text-cinema-text flex flex-col font-sans selection:bg-cinema-amber selection:text-cinema-bg overflow-x-hidden max-w-full"
       style={{ "--color-cinema-amber": themeColor } as any}
     >
       {/* Navigation Header */}
