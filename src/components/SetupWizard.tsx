@@ -49,23 +49,11 @@ export default function SetupWizard() {
     appName: "Inaetia Studios"
   });
 
-  // Step 2 Form States
-  const [videosPath, setVideosPath] = useState("/path/to/videos");
-  const [musicPath, setMusicPath] = useState("/path/to/music");
-  const [musicVideosPath, setMusicVideosPath] = useState("");
-  
-  // Path verification statuses
-  const [videosValid, setVideosValid] = useState<boolean | null>(null);
-  const [videosCount, setVideosCount] = useState<number>(0);
-  const [videosLoading, setVideosLoading] = useState(false);
-
-  const [musicValid, setMusicValid] = useState<boolean | null>(null);
-  const [musicCount, setMusicCount] = useState<number>(0);
-  const [musicLoading, setMusicLoading] = useState(false);
-
-  const [musicVideosValid, setMusicVideosValid] = useState<boolean | null>(null);
-  const [musicVideosCount, setMusicVideosCount] = useState<number>(0);
-  const [musicVideosLoading, setMusicVideosLoading] = useState(false);
+  // Step 2 Form States for multiple path support per category
+  const [musicPaths, setMusicPaths] = useState<string[]>(["media/Music"]);
+  const [moviesPaths, setMoviesPaths] = useState<string[]>(["media/Videos/Movies"]);
+  const [tvShowsPaths, setTvShowsPaths] = useState<string[]>(["media/Videos/Tv Shows"]);
+  const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>(["media/Videos"]);
 
   // Step 3 Performance Profiles
   const [perfProfile, setPerfProfile] = useState<"low" | "mid" | "high">("mid");
@@ -89,10 +77,32 @@ export default function SetupWizard() {
             appName: data.appName
           });
           setAppNameInput(data.appName || "Inaetia Studios");
-          if (data.videosPath) setVideosPath(data.videosPath);
-          if (data.musicPath) setMusicPath(data.musicPath);
-          if (data.musicVideosPath) setMusicVideosPath(data.musicVideosPath);
           if (data.themeColor) setSelectedColor(data.themeColor);
+
+          // Parse or default directory arrays
+          if (data.musicPaths) {
+            setMusicPaths(data.musicPaths.split(","));
+          } else if (data.musicPath) {
+            setMusicPaths([data.musicPath]);
+          }
+
+          if (data.moviesPaths) {
+            setMoviesPaths(data.moviesPaths.split(","));
+          } else if (data.videosPath) {
+            setMoviesPaths([data.videosPath + "/Movies"]);
+          }
+
+          if (data.tvShowsPaths) {
+            setTvShowsPaths(data.tvShowsPaths.split(","));
+          } else if (data.videosPath) {
+            setTvShowsPaths([data.videosPath + "/Tv Shows"]);
+          }
+
+          if (data.otherVideosPaths) {
+            setOtherVideosPaths(data.otherVideosPaths.split(","));
+          } else if (data.videosPath) {
+            setOtherVideosPaths([data.videosPath]);
+          }
         }
       } catch (err) {
         console.error("Error loading system setup info:", err);
@@ -108,58 +118,24 @@ export default function SetupWizard() {
     }
   }, [selectedColor]);
 
-  // Validation routines for media paths
-  const validateSinglePath = async (path: string, type: "videos" | "music" | "musicvideos") => {
+  // Validation function for a single path
+  const validatePath = async (path: string, type: "music" | "videos"): Promise<{ exists: boolean; fileCount: number }> => {
     if (!path.trim()) {
-      if (type === "musicvideos") {
-        setMusicVideosValid(null);
-        setMusicVideosCount(0);
-      }
-      return;
+      return { exists: false, fileCount: 0 };
     }
-
-    if (type === "videos") {
-      setVideosLoading(true);
-      setVideosValid(null);
-    } else if (type === "music") {
-      setMusicLoading(true);
-      setMusicValid(null);
-    } else {
-      setMusicVideosLoading(true);
-      setMusicVideosValid(null);
-    }
-
     try {
       const res = await safeFetch("/api/setup/validate-path", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, type: type === "music" ? "music" : "videos" })
+        body: JSON.stringify({ path, type })
       });
-
       if (res.ok) {
-        const data = await res.json();
-        if (type === "videos") {
-          setVideosValid(data.exists);
-          setVideosCount(data.fileCount);
-        } else if (type === "music") {
-          setMusicValid(data.exists);
-          setMusicCount(data.fileCount);
-        } else {
-          setMusicVideosValid(data.exists);
-          setMusicVideosCount(data.fileCount);
-        }
-      } else {
-        throw new Error("Validation failed");
+        return await res.json();
       }
     } catch (err) {
-      if (type === "videos") setVideosValid(false);
-      else if (type === "music") setMusicValid(false);
-      else setMusicVideosValid(false);
-    } finally {
-      if (type === "videos") setVideosLoading(false);
-      else if (type === "music") setMusicLoading(false);
-      else setMusicVideosLoading(false);
+      console.error("Error validating path:", path, err);
     }
+    return { exists: false, fileCount: 0 };
   };
 
   const handleNextStep = async () => {
@@ -168,61 +144,40 @@ export default function SetupWizard() {
     if (step === 1) {
       setStep(2);
     } else if (step === 2) {
-      // Validate paths before continuing
-      if (!videosPath.trim() || !musicPath.trim()) {
-        setErrorMsg("Videos folder and Music folder paths are required.");
+      // Validate that at least one path is non-empty for each category
+      const activeMusic = musicPaths.filter(p => p.trim() !== "");
+      const activeMovies = moviesPaths.filter(p => p.trim() !== "");
+      const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
+      const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
+
+      if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0 || activeOther.length === 0) {
+        setErrorMsg("At least one directory path is required for each category.");
         return;
       }
 
       setLoading(true);
       try {
-        // Trigger verification requests
-        const [vRes, mRes] = await Promise.all([
-          safeFetch("/api/setup/validate-path", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: videosPath, type: "videos" })
-          }),
-          safeFetch("/api/setup/validate-path", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: musicPath, type: "music" })
-          })
-        ]);
+        // Trigger validation in parallel
+        const musicValidations = await Promise.all(activeMusic.map(p => validatePath(p, "music")));
+        const moviesValidations = await Promise.all(activeMovies.map(p => validatePath(p, "videos")));
+        const tvShowsValidations = await Promise.all(activeTv.map(p => validatePath(p, "videos")));
+        const otherVideosValidations = await Promise.all(activeOther.map(p => validatePath(p, "videos")));
 
-        const vData = vRes.ok ? await vRes.json() : { exists: false, fileCount: 0 };
-        const mData = mRes.ok ? await mRes.json() : { exists: false, fileCount: 0 };
+        const invalidMusic = activeMusic.filter((_, i) => !musicValidations[i].exists);
+        const invalidMovies = activeMovies.filter((_, i) => !moviesValidations[i].exists);
+        const invalidTv = activeTv.filter((_, i) => !tvShowsValidations[i].exists);
+        const invalidOther = activeOther.filter((_, i) => !otherVideosValidations[i].exists);
 
-        setVideosValid(vData.exists);
-        setVideosCount(vData.fileCount);
-        setMusicValid(mData.exists);
-        setMusicCount(mData.fileCount);
-
-        if (!vData.exists || !mData.exists) {
-          let error = "";
-          if (!vData.exists) error += "Videos folder was not found on the server. ";
-          if (!mData.exists) error += "Music folder was not found on the server.";
+        if (invalidMusic.length > 0 || invalidMovies.length > 0 || invalidTv.length > 0 || invalidOther.length > 0) {
+          let error = "The following directories were not found on the server:\n";
+          if (invalidMusic.length > 0) error += `• Music: ${invalidMusic.join(", ")}\n`;
+          if (invalidMovies.length > 0) error += `• Movies: ${invalidMovies.join(", ")}\n`;
+          if (invalidTv.length > 0) error += `• TV Shows: ${invalidTv.join(", ")}\n`;
+          if (invalidOther.length > 0) error += `• Other Videos: ${invalidOther.join(", ")}\n`;
+          error += "Please verify that the paths exist on your host system.";
           setErrorMsg(error);
           setLoading(false);
           return;
-        }
-
-        // If optional music videos path is set, validate it too
-        if (musicVideosPath.trim()) {
-          const mvRes = await safeFetch("/api/setup/validate-path", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: musicVideosPath, type: "videos" })
-          });
-          const mvData = mvRes.ok ? await mvRes.json() : { exists: false, fileCount: 0 };
-          setMusicVideosValid(mvData.exists);
-          setMusicVideosCount(mvData.fileCount);
-
-          if (!mvData.exists) {
-            setErrorMsg("Optional Music Videos folder was not found on the server.");
-            setLoading(false);
-            return;
-          }
         }
 
         setStep(3);
@@ -250,14 +205,20 @@ export default function SetupWizard() {
     setSubmitting(true);
     setErrorMsg(null);
 
+    const activeMusic = musicPaths.filter(p => p.trim() !== "");
+    const activeMovies = moviesPaths.filter(p => p.trim() !== "");
+    const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
+    const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
+
     try {
       const res = await safeFetch("/api/setup/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          videosPath,
-          musicPath,
-          musicVideosPath,
+          musicPaths: activeMusic,
+          moviesPaths: activeMovies,
+          tvShowsPaths: activeTv,
+          otherVideosPaths: activeOther,
           performanceProfile: perfProfile,
           themeColor: selectedColor,
           appName: appNameInput
@@ -277,6 +238,75 @@ export default function SetupWizard() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const renderPathCategoryInputs = (
+    title: string,
+    paths: string[],
+    setPaths: React.Dispatch<React.SetStateAction<string[]>>,
+    type: "music" | "videos",
+    description: string
+  ) => {
+    const addPath = () => {
+      setPaths([...paths, ""]);
+    };
+
+    const removePath = (index: number) => {
+      if (paths.length === 1) {
+        setPaths([""]);
+      } else {
+        setPaths(paths.filter((_, i) => i !== index));
+      }
+    };
+
+    const updatePathValue = (index: number, val: string) => {
+      const updated = [...paths];
+      updated[index] = val;
+      setPaths(updated);
+    };
+
+    return (
+      <div className="space-y-2 bg-black/25 p-4 rounded-2xl border border-cinema-border/50">
+        <div className="flex justify-between items-center">
+          <div className="space-y-0.5 text-left">
+            <label className="font-bold text-xs uppercase text-zinc-300 tracking-wider flex items-center gap-1.5">
+              <Folder className="w-4 h-4 text-cinema-amber" /> {title}
+            </label>
+            <p className="text-[10px] text-zinc-500 italic">{description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={addPath}
+            className="text-[10px] text-cinema-amber font-extrabold bg-cinema-amber/10 px-2.5 py-1 rounded-lg border border-cinema-amber/20 hover:bg-cinema-amber/20 transition-all cursor-pointer"
+          >
+            + Add Path
+          </button>
+        </div>
+        <div className="space-y-2 pt-1">
+          {paths.map((p, idx) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <input
+                type="text"
+                placeholder={type === "music" ? "e.g. /home/user/Music" : "e.g. /home/user/Videos"}
+                value={p}
+                onChange={(e) => updatePathValue(idx, e.target.value)}
+                className="flex-1 bg-[#070712] border border-cinema-border/60 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cinema-amber"
+              />
+              <button
+                type="button"
+                onClick={() => removePath(idx)}
+                className="text-zinc-500 hover:text-red-400 p-2 border border-cinema-border/40 hover:border-red-500/30 rounded-xl transition-all cursor-pointer"
+                title="Remove path"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -450,7 +480,7 @@ export default function SetupWizard() {
             </div>
 
             {/* Content Wizard Cards with Micro-animations */}
-            <div className="flex-1 min-h-[280px] flex flex-col justify-center">
+            <div className="flex-1 min-h-[300px] flex flex-col justify-center">
               <AnimatePresence mode="wait">
                 
                 {/* STEP 1: WELCOME SCREEN */}
@@ -517,125 +547,53 @@ export default function SetupWizard() {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
-                    className="space-y-5"
+                    className="space-y-4"
                   >
                     <div className="space-y-1.5">
                       <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
                         Setup Media Directories
                       </h2>
                       <p className="text-cinema-muted text-xs">
-                        Please provide the absolute file-system directories for your video library and music files on the host computer.
+                        Configure directories for each library category separately. You can add multiple paths per category.
                       </p>
                     </div>
 
-                    <div className="space-y-4">
-                      {/* Videos Folder Input */}
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <label className="font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
-                            <Folder className="w-3.5 h-3.5 text-cinema-amber" /> Videos Directory
-                          </label>
-                          <span className="text-[10px] text-zinc-500 font-mono italic">"Browse" / Root Path</span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="e.g. /home/user/Videos"
-                            value={videosPath}
-                            onChange={(e) => {
-                              setVideosPath(e.target.value);
-                              setVideosValid(null);
-                            }}
-                            onBlur={() => validateSinglePath(videosPath, "videos")}
-                            className="w-full bg-[#070712] border border-cinema-border rounded-xl pl-3 pr-20 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-cinema-amber"
-                          />
-                          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                            {videosLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-cinema-amber" />}
-                            {videosValid === true && (
-                              <span className="text-[10px] text-green-400 font-semibold bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">
-                                {videosCount} Files
-                              </span>
-                            )}
-                            {videosValid === false && (
-                              <span className="text-[10px] text-red-400 font-semibold bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
-                                Invalid
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                    <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1.5 scrollbar-thin">
+                      {/* Music Category */}
+                      {renderPathCategoryInputs(
+                        "Music Directories",
+                        musicPaths,
+                        setMusicPaths,
+                        "music",
+                        "Files will be indexed as music tracks"
+                      )}
 
-                      {/* Music Folder Input */}
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <label className="font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
-                            <Folder className="w-3.5 h-3.5 text-cinema-amber" /> Music Directory
-                          </label>
-                          <span className="text-[10px] text-zinc-500 font-mono italic">Root audio folder</span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="e.g. /home/user/Music"
-                            value={musicPath}
-                            onChange={(e) => {
-                              setMusicPath(e.target.value);
-                              setMusicValid(null);
-                            }}
-                            onBlur={() => validateSinglePath(musicPath, "music")}
-                            className="w-full bg-[#070712] border border-cinema-border rounded-xl pl-3 pr-20 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-cinema-amber"
-                          />
-                          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                            {musicLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-cinema-amber" />}
-                            {musicValid === true && (
-                              <span className="text-[10px] text-green-400 font-semibold bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">
-                                {musicCount} Files
-                              </span>
-                            )}
-                            {musicValid === false && (
-                              <span className="text-[10px] text-red-400 font-semibold bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
-                                Invalid
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      {/* Movies Category */}
+                      {renderPathCategoryInputs(
+                        "Movies Directories",
+                        moviesPaths,
+                        setMoviesPaths,
+                        "videos",
+                        "Files will be indexed as full-length movies"
+                      )}
 
-                      {/* Optional Music Videos Folder Input */}
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between items-center text-xs">
-                          <label className="font-bold uppercase text-zinc-500 tracking-wider flex items-center gap-1.5">
-                            <Folder className="w-3.5 h-3.5 text-zinc-500" /> Music Videos Directory (Optional)
-                          </label>
-                          <span className="text-[10px] text-zinc-500 font-mono">Optional</span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            placeholder="e.g. /home/user/MusicVideos"
-                            value={musicVideosPath}
-                            onChange={(e) => {
-                              setMusicVideosPath(e.target.value);
-                              setMusicVideosValid(null);
-                            }}
-                            onBlur={() => validateSinglePath(musicVideosPath, "musicvideos")}
-                            className="w-full bg-[#070712] border border-cinema-border rounded-xl pl-3 pr-20 py-2.5 text-xs text-zinc-400 font-mono focus:outline-none focus:border-zinc-500"
-                          />
-                          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                            {musicVideosLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-500" />}
-                            {musicVideosValid === true && (
-                              <span className="text-[10px] text-green-400 font-semibold bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20">
-                                {musicVideosCount} Files
-                              </span>
-                            )}
-                            {musicVideosValid === false && (
-                              <span className="text-[10px] text-red-400 font-semibold bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20">
-                                Invalid
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      {/* TV Shows Category */}
+                      {renderPathCategoryInputs(
+                        "TV Shows Directories",
+                        tvShowsPaths,
+                        setTvShowsPaths,
+                        "videos",
+                        "Files will be grouped into TV Series, seasons, and episodes"
+                      )}
+
+                      {/* Other Videos Category */}
+                      {renderPathCategoryInputs(
+                        "Other Videos Directories",
+                        otherVideosPaths,
+                        setOtherVideosPaths,
+                        "videos",
+                        "Miscellaneous movies, home videos, clips, or sub-channel media"
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -810,8 +768,8 @@ export default function SetupWizard() {
 
             {/* Error messaging */}
             {errorMsg && (
-              <div className="text-xs text-red-500 bg-red-600/10 border border-red-500/20 px-4 py-2.5 rounded-xl text-left animate-pulse flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
+              <div className="text-xs text-red-500 bg-red-600/10 border border-red-500/20 px-4 py-2.5 rounded-xl text-left whitespace-pre-wrap flex items-start gap-2 max-h-[140px] overflow-y-auto">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{errorMsg}</span>
               </div>
             )}
@@ -820,6 +778,7 @@ export default function SetupWizard() {
             <div className="flex justify-between gap-3 pt-2">
               {step > 1 ? (
                 <button
+                  type="button"
                   onClick={handlePrevStep}
                   className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold rounded-xl text-xs sm:text-sm flex items-center gap-1.5 transition-all cursor-pointer"
                 >
@@ -831,6 +790,7 @@ export default function SetupWizard() {
 
               {step < 4 ? (
                 <button
+                  type="button"
                   onClick={handleNextStep}
                   disabled={loading}
                   className="px-6 py-2.5 bg-cinema-amber text-cinema-bg hover:brightness-110 font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-cinema-amber/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -847,6 +807,7 @@ export default function SetupWizard() {
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleFinish}
                   disabled={submitting}
                   className="px-6 py-2.5 bg-cinema-amber text-cinema-bg hover:brightness-110 font-black rounded-xl text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-cinema-amber/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"

@@ -43,6 +43,14 @@ function resolveHome(filepath: string): string {
   return filepath;
 }
 
+// Helper to parse comma-separated paths or fall back to default
+function parsePathsEnv(envValue: string | undefined, defaultPath: string): string[] {
+  if (!envValue) {
+    return [defaultPath];
+  }
+  return envValue.split(",").map(p => p.trim()).filter(Boolean);
+}
+
 // Configure media folders with safe fallbacks (using let so setup wizard can reload dynamically)
 let VIDEOS_PATH = process.env.VIDEOS_PATH || "";
 let MUSIC_PATH = process.env.MUSIC_PATH || "";
@@ -102,11 +110,19 @@ const hasMntStorage = fs.existsSync("/mnt/storage");
 // Ensure folders exist
 function ensureDirs() {
   const dirs = [
-    targetVideosDir, 
-    targetMusicDir, 
     thumbsCacheDir, 
     PROFILES_DIR
   ];
+
+  const musicPaths = parsePathsEnv(process.env.MUSIC_PATHS, process.env.MUSIC_PATH || "media/Music");
+  const moviesPaths = parsePathsEnv(process.env.MOVIES_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+  const tvShowsPaths = parsePathsEnv(process.env.TV_SHOWS_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+  const otherVideosPaths = parsePathsEnv(process.env.OTHER_VIDEOS_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+
+  [...musicPaths, ...moviesPaths, ...tvShowsPaths, ...otherVideosPaths].forEach(dir => {
+    dirs.push(resolveHome(dir));
+  });
+
   if (targetMusicVideosDir) {
     dirs.push(targetMusicVideosDir);
   }
@@ -490,6 +506,12 @@ function parseVideoPath(relativePath: string, filename: string, title: string) {
   };
 }
 
+interface ScannedFile {
+  file: string;
+  baseDir: string;
+  category: "music" | "movie" | "episode" | "video";
+}
+
 // Rescan Libraries
 async function scanAllLibraries() {
   const startTime = Date.now();
@@ -510,26 +532,71 @@ async function scanAllLibraries() {
     if (m && m.filepath) existingMusicMap.set(m.filepath, m);
   });
 
-  // 1. Scan Movies
+  // 1. Scan Movies, TV Shows, and Other Videos
   const videoExts = [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
-  const videoFiles = getFilesRecursively(targetVideosDir, videoExts);
-  
-  // Also scan MUSIC_VIDEOS_PATH if defined, exists and is not already inside targetVideosDir
+  const videoScannedFiles: ScannedFile[] = [];
+
+  // Movies
+  const resolvedMoviesPaths = parsePathsEnv(process.env.MOVIES_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+  resolvedMoviesPaths.forEach(dir => {
+    const resolved = resolveHome(dir);
+    if (fs.existsSync(resolved)) {
+      const files = getFilesRecursively(resolved, videoExts);
+      files.forEach(f => {
+        videoScannedFiles.push({ file: f, baseDir: resolved, category: "movie" });
+      });
+    }
+  });
+
+  // TV Shows
+  const resolvedTvShowsPaths = parsePathsEnv(process.env.TV_SHOWS_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+  resolvedTvShowsPaths.forEach(dir => {
+    const resolved = resolveHome(dir);
+    if (fs.existsSync(resolved)) {
+      const files = getFilesRecursively(resolved, videoExts);
+      files.forEach(f => {
+        videoScannedFiles.push({ file: f, baseDir: resolved, category: "episode" });
+      });
+    }
+  });
+
+  // Other Videos
+  const resolvedOtherVideosPaths = parsePathsEnv(process.env.OTHER_VIDEOS_PATHS, process.env.VIDEOS_PATH || "media/Videos");
+  resolvedOtherVideosPaths.forEach(dir => {
+    const resolved = resolveHome(dir);
+    if (fs.existsSync(resolved)) {
+      const files = getFilesRecursively(resolved, videoExts);
+      files.forEach(f => {
+        videoScannedFiles.push({ file: f, baseDir: resolved, category: "video" });
+      });
+    }
+  });
+
+  // Also scan MUSIC_VIDEOS_PATH if defined, exists and is not already scanned
   const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
   if (envMusicVideos && fs.existsSync(envMusicVideos)) {
-    const isUnderVideos = path.resolve(envMusicVideos).startsWith(path.resolve(targetVideosDir));
-    if (!isUnderVideos) {
-      const musicVideoFiles = getFilesRecursively(envMusicVideos, videoExts);
-      videoFiles.push(...musicVideoFiles);
-    }
+    const files = getFilesRecursively(envMusicVideos, videoExts);
+    files.forEach(f => {
+      videoScannedFiles.push({ file: f, baseDir: envMusicVideos, category: "video" });
+    });
   }
-  
-  const moviePromises = videoFiles.map(async (file) => {
+
+  // De-duplicate video files by absolute path
+  const uniqueVideoFilesMap = new Map<string, ScannedFile>();
+  videoScannedFiles.forEach(item => {
+    if (!uniqueVideoFilesMap.has(item.file)) {
+      uniqueVideoFilesMap.set(item.file, item);
+    }
+  });
+  const videoFiles = Array.from(uniqueVideoFilesMap.values());
+
+  const moviePromises = videoFiles.map(async (item) => {
+    const file = item.file;
     try {
       const isUnderMusicVideo = envMusicVideos && file.startsWith(path.resolve(envMusicVideos));
       const relativePath = isUnderMusicVideo
         ? path.relative(path.dirname(envMusicVideos), file)
-        : path.relative(targetVideosDir, file);
+        : path.relative(item.baseDir, file);
       const filename = path.basename(file);
       const ext = path.extname(file).toLowerCase();
       
@@ -599,9 +666,21 @@ async function scanAllLibraries() {
       // TV Show awareness
       const epPattern = parseSeasonEpisode(filename);
       const tvShowNfoPath = findTvShowNfo(file);
-      const isTvShow = !!tvShowNfoPath || epPattern.season !== null || parsedMeta.type === "episode";
+      const isTvShow = item.category === "episode" || !!tvShowNfoPath || epPattern.season !== null || parsedMeta.type === "episode";
 
-      let type: "movie" | "episode" | "video" = isTvShow ? "episode" : (parsedMeta.type === "movie" ? "movie" : "video");
+      let type: "movie" | "episode" | "video" = "video";
+      let category = "Other";
+      if (isTvShow) {
+        type = "episode";
+        category = "Tv Shows";
+      } else if (item.category === "movie") {
+        type = "movie";
+        category = "Movies";
+      } else {
+        type = parsedMeta.type === "movie" ? "movie" : "video";
+        category = parsedMeta.category || "Videos";
+      }
+
       let showTitle: string | null = null;
       let season: number | null = epPattern.season;
       let episode: number | null = epPattern.episode;
@@ -741,9 +820,9 @@ async function scanAllLibraries() {
         hasRichMetadata: !!nfo,
 
         // Core fields
-        category: parsedMeta.category,
+        category,
         subcategory: parsedMeta.subcategory,
-        showName: parsedMeta.showName,
+        showName: parsedMeta.showName || showTitle,
         seasonName: parsedMeta.seasonName,
         duration,
         hasSubtitles,
@@ -762,11 +841,32 @@ async function scanAllLibraries() {
 
   // 2. Scan Music
   const musicExts = [".mp3", ".flac", ".m4a", ".wav", ".ogg", ".aac"];
-  const musicFiles = getFilesRecursively(targetMusicDir, musicExts);
+  const musicScannedFiles: ScannedFile[] = [];
+  const resolvedMusicPaths = parsePathsEnv(process.env.MUSIC_PATHS, process.env.MUSIC_PATH || "media/Music");
 
-  const musicPromises = musicFiles.map(async (file) => {
+  resolvedMusicPaths.forEach(dir => {
+    const resolved = resolveHome(dir);
+    if (fs.existsSync(resolved)) {
+      const files = getFilesRecursively(resolved, musicExts);
+      files.forEach(f => {
+        musicScannedFiles.push({ file: f, baseDir: resolved, category: "music" });
+      });
+    }
+  });
+
+  // De-duplicate music files
+  const uniqueMusicFilesMap = new Map<string, ScannedFile>();
+  musicScannedFiles.forEach(item => {
+    if (!uniqueMusicFilesMap.has(item.file)) {
+      uniqueMusicFilesMap.set(item.file, item);
+    }
+  });
+  const musicFiles = Array.from(uniqueMusicFilesMap.values());
+
+  const musicPromises = musicFiles.map(async (item) => {
+    const file = item.file;
     try {
-      const relativePath = path.relative(targetMusicDir, file);
+      const relativePath = path.relative(item.baseDir, file);
       const filename = path.basename(file);
       const ext = path.extname(file);
       const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
@@ -1830,23 +1930,38 @@ interface ChannelDir {
 function getChannelDirectories(): ChannelDir[] {
   const dirs: ChannelDir[] = [];
   
-  // 1. Scan immediate subfolders of targetVideosDir
-  if (fs.existsSync(targetVideosDir)) {
-    try {
-      const subfolders = fs.readdirSync(targetVideosDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
-        .map(dirent => dirent.name);
-      
-      subfolders.forEach(name => {
-        dirs.push({
-          name,
-          path: path.join(targetVideosDir, name)
+  // Scan all movies, tv shows, and other video folders
+  const allVideoPaths = [
+    ...parsePathsEnv(process.env.MOVIES_PATHS, process.env.VIDEOS_PATH || "media/Videos"),
+    ...parsePathsEnv(process.env.TV_SHOWS_PATHS, process.env.VIDEOS_PATH || "media/Videos"),
+    ...parsePathsEnv(process.env.OTHER_VIDEOS_PATHS, process.env.VIDEOS_PATH || "media/Videos")
+  ];
+
+  // De-duplicate paths
+  const uniquePaths = Array.from(new Set(allVideoPaths.map(p => path.resolve(resolveHome(p)))));
+
+  uniquePaths.forEach(videoDir => {
+    if (fs.existsSync(videoDir)) {
+      try {
+        const subfolders = fs.readdirSync(videoDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
+          .map(dirent => dirent.name);
+        
+        subfolders.forEach(name => {
+          const fullPath = path.join(videoDir, name);
+          const alreadyAdded = dirs.some(d => path.resolve(d.path) === path.resolve(fullPath));
+          if (!alreadyAdded) {
+            dirs.push({
+              name,
+              path: fullPath
+            });
+          }
         });
-      });
-    } catch (err) {
-      console.error("Error scanning subfolders in targetVideosDir:", err);
+      } catch (err) {
+        console.error(`Error scanning subfolders in ${videoDir}:`, err);
+      }
     }
-  }
+  });
   
   // 2. Check if process.env.MUSIC_VIDEOS_PATH exists and is not already included
   const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
@@ -2315,37 +2430,46 @@ function getStationsList() {
   });
   
   // 5. Folder-based stations
-  if (fs.existsSync(targetMusicDir)) {
-    try {
-      const subfolders = fs.readdirSync(targetMusicDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
-        .map(dirent => dirent.name);
-      
-      const folderColors = ["#F59E0B", "#EC4899", "#06B6D4", "#84CC16", "#6366F1", "#14B8A6", "#F97316"];
-      
-      subfolders.forEach((name, idx) => {
-        const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-        const folderPath = path.resolve(path.join(targetMusicDir, name));
+  const resolvedMusicPaths = parsePathsEnv(process.env.MUSIC_PATHS, process.env.MUSIC_PATH || "media/Music");
+  let folderIdx = 0;
+  const folderColors = ["#F59E0B", "#EC4899", "#06B6D4", "#84CC16", "#6366F1", "#14B8A6", "#F97316"];
+
+  resolvedMusicPaths.forEach(musicDir => {
+    const resolved = resolveHome(musicDir);
+    if (fs.existsSync(resolved)) {
+      try {
+        const subfolders = fs.readdirSync(resolved, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
+          .map(dirent => dirent.name);
         
-        const tracksInFolder = musicCache.filter(t => {
-          const fullPath = musicIndex.get(t.id);
-          return fullPath && fullPath.startsWith(folderPath);
+        subfolders.forEach((name) => {
+          const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+          const folderPath = path.resolve(path.join(resolved, name));
+          
+          // Check if station already exists
+          if (stations.some(s => s.id === id)) return;
+
+          const tracksInFolder = musicCache.filter(t => {
+            const fullPath = musicIndex.get(t.id);
+            return fullPath && fullPath.startsWith(folderPath);
+          });
+          
+          stations.push({
+            id,
+            name: name,
+            stationNumber: 5 + folderIdx,
+            color: folderColors[folderIdx % folderColors.length],
+            type: "folder",
+            sourceFolder: folderPath,
+            trackCount: tracksInFolder.length
+          });
+          folderIdx++;
         });
-        
-        stations.push({
-          id,
-          name: name,
-          stationNumber: 5 + idx,
-          color: folderColors[idx % folderColors.length],
-          type: "folder",
-          sourceFolder: folderPath,
-          trackCount: tracksInFolder.length
-        });
-      });
-    } catch (err) {
-      console.error("Error scanning music subfolders:", err);
+      } catch (err) {
+        console.error(`Error scanning music subfolders in ${resolved}:`, err);
+      }
     }
-  }
+  });
   
   return stations;
 }
@@ -2795,6 +2919,10 @@ app.get("/api/setup/status", (req, res) => {
     videosPath: process.env.VIDEOS_PATH || "",
     musicPath: process.env.MUSIC_PATH || "",
     musicVideosPath: process.env.MUSIC_VIDEOS_PATH || "",
+    musicPaths: process.env.MUSIC_PATHS || "",
+    moviesPaths: process.env.MOVIES_PATHS || "",
+    tvShowsPaths: process.env.TV_SHOWS_PATHS || "",
+    otherVideosPaths: process.env.OTHER_VIDEOS_PATHS || "",
     serverIp: getServerIpAddress(),
   });
 });
@@ -2823,14 +2951,27 @@ app.post("/api/setup/submit", async (req, res) => {
     videosPath, 
     musicPath, 
     musicVideosPath, 
+    musicPaths,
+    moviesPaths,
+    tvShowsPaths,
+    otherVideosPaths,
     performanceProfile, 
     themeColor,
     appName 
   } = req.body;
 
-  if (!videosPath || !musicPath) {
-    return res.status(400).json({ error: "Videos and Music paths are required" });
-  }
+  const musicPathsArr = Array.isArray(musicPaths) ? musicPaths : (musicPath ? [musicPath] : ["media/Music"]);
+  const moviesPathsArr = Array.isArray(moviesPaths) ? moviesPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+  const tvShowsPathsArr = Array.isArray(tvShowsPaths) ? tvShowsPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+  const otherVideosPathsArr = Array.isArray(otherVideosPaths) ? otherVideosPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+
+  const musicPathsStr = musicPathsArr.join(",");
+  const moviesPathsStr = moviesPathsArr.join(",");
+  const tvShowsPathsStr = tvShowsPathsArr.join(",");
+  const otherVideosPathsStr = otherVideosPathsArr.join(",");
+
+  const finalVideosPath = moviesPathsArr[0] || otherVideosPathsArr[0] || "media/Videos";
+  const finalMusicPath = musicPathsArr[0] || "media/Music";
 
   let maxConcurrentFfprobe = 5;
   let rescanInterval = 30;
@@ -2850,9 +2991,13 @@ SETUP_COMPLETE=true
 APP_NAME="${appName || "Inaetia Studios"}"
 PORT=${process.env.PORT || 3000}
 HOST=${process.env.HOST || "0.0.0.0"}
-VIDEOS_PATH="${videosPath}"
-MUSIC_PATH="${musicPath}"
+VIDEOS_PATH="${finalVideosPath}"
+MUSIC_PATH="${finalMusicPath}"
 MUSIC_VIDEOS_PATH="${musicVideosPath || ""}"
+MUSIC_PATHS="${musicPathsStr}"
+MOVIES_PATHS="${moviesPathsStr}"
+TV_SHOWS_PATHS="${tvShowsPathsStr}"
+OTHER_VIDEOS_PATHS="${otherVideosPathsStr}"
 THUMBNAILS_CACHE_PATH="/tmp/inaetia/thumbs"
 PROFILES_PATH="~/.inaetia/profiles"
 MAX_CONCURRENT_FFPROBE=${maxConcurrentFfprobe}
@@ -2870,9 +3015,13 @@ SERVER_IP="${getServerIpAddress()}"
 
     process.env.SETUP_COMPLETE = "true";
     process.env.APP_NAME = appName || "Inaetia Studios";
-    process.env.VIDEOS_PATH = videosPath;
-    process.env.MUSIC_PATH = musicPath;
+    process.env.VIDEOS_PATH = finalVideosPath;
+    process.env.MUSIC_PATH = finalMusicPath;
     process.env.MUSIC_VIDEOS_PATH = musicVideosPath || "";
+    process.env.MUSIC_PATHS = musicPathsStr;
+    process.env.MOVIES_PATHS = moviesPathsStr;
+    process.env.TV_SHOWS_PATHS = tvShowsPathsStr;
+    process.env.OTHER_VIDEOS_PATHS = otherVideosPathsStr;
     process.env.THUMBNAILS_CACHE_PATH = "/tmp/inaetia/thumbs";
     process.env.PROFILES_PATH = "~/.inaetia/profiles";
     process.env.MAX_CONCURRENT_FFPROBE = maxConcurrentFfprobe.toString();
@@ -2891,6 +3040,89 @@ SERVER_IP="${getServerIpAddress()}"
     res.json({ success: true });
   } catch (err: any) {
     console.error("Failed to write setup config:", err);
+    res.status(500).json({ error: "Failed to save configuration", details: err.message });
+  }
+});
+
+app.post("/api/settings/save-directories", async (req, res) => {
+  const { 
+    musicPaths,
+    moviesPaths,
+    tvShowsPaths,
+    otherVideosPaths
+  } = req.body;
+
+  if (!musicPaths || !moviesPaths || !tvShowsPaths || !otherVideosPaths) {
+    return res.status(400).json({ error: "All directory path arrays are required" });
+  }
+
+  const musicPathsStr = Array.isArray(musicPaths) ? musicPaths.join(",") : musicPaths;
+  const moviesPathsStr = Array.isArray(moviesPaths) ? moviesPaths.join(",") : moviesPaths;
+  const tvShowsPathsStr = Array.isArray(tvShowsPaths) ? tvShowsPaths.join(",") : tvShowsPaths;
+  const otherVideosPathsStr = Array.isArray(otherVideosPaths) ? otherVideosPaths.join(",") : otherVideosPaths;
+
+  const musicPathsArr = Array.isArray(musicPaths) ? musicPaths : [musicPaths];
+  const moviesPathsArr = Array.isArray(moviesPaths) ? moviesPaths : [moviesPaths];
+  const otherVideosPathsArr = Array.isArray(otherVideosPaths) ? otherVideosPaths : [otherVideosPaths];
+
+  // Update .env file content
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    let envContent = "";
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, "utf-8");
+    }
+
+    // Function to replace or append environment variables
+    const updateEnvVar = (content: string, key: string, value: string): string => {
+      const regex = new RegExp(`^${key}=.*$`, "m");
+      if (regex.test(content)) {
+        return content.replace(regex, `${key}="${value}"`);
+      } else {
+        return content + `\n${key}="${value}"`;
+      }
+    };
+
+    let updatedEnv = envContent;
+    updatedEnv = updateEnvVar(updatedEnv, "MUSIC_PATHS", musicPathsStr);
+    updatedEnv = updateEnvVar(updatedEnv, "MOVIES_PATHS", moviesPathsStr);
+    updatedEnv = updateEnvVar(updatedEnv, "TV_SHOWS_PATHS", tvShowsPathsStr);
+    updatedEnv = updateEnvVar(updatedEnv, "OTHER_VIDEOS_PATHS", otherVideosPathsStr);
+    
+    // Also update legacy single path variables for compatibility
+    if (musicPathsArr.length > 0) {
+      updatedEnv = updateEnvVar(updatedEnv, "MUSIC_PATH", musicPathsArr[0]);
+    }
+    if (moviesPathsArr.length > 0) {
+      updatedEnv = updateEnvVar(updatedEnv, "VIDEOS_PATH", moviesPathsArr[0]);
+    } else if (otherVideosPathsArr.length > 0) {
+      updatedEnv = updateEnvVar(updatedEnv, "VIDEOS_PATH", otherVideosPathsArr[0]);
+    }
+
+    fs.writeFileSync(envPath, updatedEnv, "utf-8");
+
+    // Update in process.env
+    process.env.MUSIC_PATHS = musicPathsStr;
+    process.env.MOVIES_PATHS = moviesPathsStr;
+    process.env.TV_SHOWS_PATHS = tvShowsPathsStr;
+    process.env.OTHER_VIDEOS_PATHS = otherVideosPathsStr;
+    if (musicPathsArr.length > 0) {
+      process.env.MUSIC_PATH = musicPathsArr[0];
+    }
+    if (moviesPathsArr.length > 0) {
+      process.env.VIDEOS_PATH = moviesPathsArr[0];
+    } else if (otherVideosPathsArr.length > 0) {
+      process.env.VIDEOS_PATH = otherVideosPathsArr[0];
+    }
+
+    reinitializePathsAndSettings();
+
+    // Trigger async rescan
+    triggerScan().catch(console.error);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Failed to save directories settings:", err);
     res.status(500).json({ error: "Failed to save configuration", details: err.message });
   }
 });

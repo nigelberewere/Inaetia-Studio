@@ -83,6 +83,10 @@ export interface ServerStatus {
   serverIp?: string;
   videosPath?: string;
   musicPath?: string;
+  musicPaths?: string;
+  moviesPaths?: string;
+  tvShowsPaths?: string;
+  otherVideosPaths?: string;
   appName?: string;
   port?: number;
 }
