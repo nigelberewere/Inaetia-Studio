@@ -747,7 +747,7 @@ async function scanAllLibraries() {
         seasonName: parsedMeta.seasonName,
         duration,
         hasSubtitles,
-        thumbnail: `/api/thumbnail/${id}`,
+        thumbnail: `/api/artwork/${id}/thumb`,
         nfoMtime,
       };
     } catch (err: any) {
@@ -1394,7 +1394,7 @@ app.get("/api/show-poster/:showName", (req, res) => {
         return fs.createReadStream(thumbPath).pipe(res);
       } else {
         // Fallback or generate on-the-fly via redirect to the normal thumbnail endpoint
-        return res.redirect(`/api/thumbnail/${firstEpisodeId}`);
+        return res.redirect(`/api/artwork/${firstEpisodeId}/thumb`);
       }
     }
   }
@@ -1471,7 +1471,7 @@ app.get("/api/artwork/:id/:type", (req, res) => {
 
     if (streamImageIfExists(posterPath)) return;
     if (streamImageIfExists(artwork.poster)) return;
-    return res.redirect(`/api/thumbnail/${id}`);
+    return res.redirect(`/api/artwork/${id}/thumb`);
   }
 
   if (type === "showFanart") {

@@ -297,6 +297,9 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
 
     // 3. Locate thumb
     let thumbPath = fileExistsCaseInsensitive(dir, videoBase + "-thumb", exts);
+    if (!thumbPath) {
+      thumbPath = fileExistsCaseInsensitive(dir, videoBase, exts);
+    }
     if (!thumbPath && !isLibraryRoot) {
       thumbPath = fileExistsCaseInsensitive(dir, "thumb", exts) ||
                   fileExistsCaseInsensitive(dir, "landscape", exts);
