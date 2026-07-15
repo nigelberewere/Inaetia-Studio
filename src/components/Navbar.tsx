@@ -132,13 +132,13 @@ export default function Navbar() {
       </div>
 
       {/* Right Tools: Search Bar & Settings & Avatar */}
-      <div className="flex items-center gap-1.5 sm:gap-3 flex-1 justify-end md:flex-initial">
+      <div className="flex items-center gap-2 sm:gap-4 flex-1 justify-end md:flex-initial min-w-0 ml-3 sm:ml-6">
         {/* Search Input Box */}
         <div 
-          className={`relative flex items-center rounded-full bg-cinema-card border transition-all duration-300 ${
+          className={`relative flex items-center rounded-full bg-cinema-card border transition-all duration-300 flex-1 md:flex-initial ${
             isSearchFocused || searchQuery 
-              ? "w-full max-w-[150px] xs:max-w-[200px] sm:max-w-[320px] border-cinema-amber/40 ring-1 ring-cinema-amber/30" 
-              : "w-24 xs:w-32 sm:w-48 border-cinema-border"
+              ? "w-full max-w-[220px] xs:max-w-[280px] sm:max-w-[360px] border-cinema-amber/40 ring-1 ring-cinema-amber/30" 
+              : "w-full max-w-[140px] xs:max-w-[200px] sm:max-w-[280px] border-cinema-border"
           }`}
         >
           <Search className="w-4 h-4 text-cinema-muted ml-3 absolute left-0 pointer-events-none" />
@@ -163,7 +163,7 @@ export default function Navbar() {
         </div>
 
         {/* Small screen navigation shortcut buttons */}
-        <div className={`items-center gap-1.5 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
+        <div className={`items-center gap-1.5 shrink-0 ${isSearchFocused ? "hidden" : "flex md:hidden"}`}>
           <button
             onClick={() => { clearSearch(); setActiveView("movies"); }}
             className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "movies" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
@@ -196,7 +196,7 @@ export default function Navbar() {
 
         {/* Active Profile Avatar with Dropdown */}
         {currentProfile && (
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative shrink-0" ref={dropdownRef}>
             <div 
               onClick={() => {
                 setShowDropdown(!showDropdown);
