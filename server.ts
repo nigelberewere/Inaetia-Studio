@@ -2837,6 +2837,10 @@ app.get("/api/status", async (req, res) => {
         serverIp: getServerIpAddress(),
         videosPath: VIDEOS_PATH || "media/Videos",
         musicPath: MUSIC_PATH || "media/Music",
+        musicPaths: process.env.MUSIC_PATHS || "",
+        moviesPaths: process.env.MOVIES_PATHS || "",
+        tvShowsPaths: process.env.TV_SHOWS_PATHS || "",
+        otherVideosPaths: process.env.OTHER_VIDEOS_PATHS || "",
         appName: process.env.APP_NAME || "Inaetia Studios",
         port: PORT,
       });

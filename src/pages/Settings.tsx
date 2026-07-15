@@ -30,15 +30,43 @@ export default function Settings() {
   const [health, setHealth] = useState<LibraryHealth | null>(null);
   const [fetchingHealth, setFetchingHealth] = useState(false);
 
-  // Directory Management States
-  const [musicPaths, setMusicPaths] = useState<string[]>([]);
-  const [moviesPaths, setMoviesPaths] = useState<string[]>([]);
-  const [tvShowsPaths, setTvShowsPaths] = useState<string[]>([]);
-  const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>([]);
+  // Is Form Dirty (edited by user)
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Directory Management States (Initialized from status if already loaded, otherwise fallback)
+  const [musicPaths, setMusicPaths] = useState<string[]>(() => {
+    if (status) {
+      if (status.musicPaths) return status.musicPaths.split(",");
+      if (status.musicPath) return [status.musicPath];
+    }
+    return ["media/Music"];
+  });
+  const [moviesPaths, setMoviesPaths] = useState<string[]>(() => {
+    if (status) {
+      if (status.moviesPaths) return status.moviesPaths.split(",");
+      if (status.videosPath) return [status.videosPath];
+    }
+    return ["media/Videos/Movies"];
+  });
+  const [tvShowsPaths, setTvShowsPaths] = useState<string[]>(() => {
+    if (status) {
+      if (status.tvShowsPaths) return status.tvShowsPaths.split(",");
+      if (status.videosPath) return [status.videosPath];
+    }
+    return ["media/Videos/Tv Shows"];
+  });
+  const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>(() => {
+    if (status) {
+      if (status.otherVideosPaths) return status.otherVideosPaths.split(",");
+      if (status.videosPath) return [status.videosPath];
+    }
+    return ["media/Videos"];
+  });
+
   const [savingDirs, setSavingDirs] = useState(false);
   const [saveDirsSuccess, setSaveDirsSuccess] = useState("");
   const [saveDirsError, setSaveDirsError] = useState("");
-  const [hasInitializedDirs, setHasInitializedDirs] = useState(false);
+  const [hasInitializedDirs, setHasInitializedDirs] = useState(() => !!status);
 
   const fetchHealth = async () => {
     setFetchingHealth(true);
@@ -66,9 +94,9 @@ export default function Settings() {
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize directory states from status
+  // Initialize directory states from status if not dirty and not yet initialized
   useEffect(() => {
-    if (status && !hasInitializedDirs) {
+    if (status && !hasInitializedDirs && !isDirty) {
       if (status.musicPaths) {
         setMusicPaths(status.musicPaths.split(","));
       } else if (status.musicPath) {
@@ -102,7 +130,7 @@ export default function Settings() {
       }
       setHasInitializedDirs(true);
     }
-  }, [status, hasInitializedDirs]);
+  }, [status, hasInitializedDirs, isDirty]);
 
   // Format Bytes (B to KB/MB/GB/TB)
   const formatBytes = (bytes: number) => {
@@ -200,7 +228,7 @@ export default function Settings() {
 
       if (res.ok) {
         setSaveDirsSuccess("Media directories updated successfully! Triggered background rescan.");
-        setHasInitializedDirs(false);
+        setIsDirty(false);
         fetchStatus();
         fetchHealth();
         setTimeout(() => setSaveDirsSuccess(""), 6000);
@@ -222,10 +250,12 @@ export default function Settings() {
     type: "music" | "videos"
   ) => {
     const addPath = () => {
+      setIsDirty(true);
       setPaths([...paths, ""]);
     };
 
     const removePath = (index: number) => {
+      setIsDirty(true);
       if (paths.length === 1) {
         setPaths([""]);
       } else {
@@ -234,6 +264,7 @@ export default function Settings() {
     };
 
     const updatePathValue = (index: number, val: string) => {
+      setIsDirty(true);
       const updated = [...paths];
       updated[index] = val;
       setPaths(updated);

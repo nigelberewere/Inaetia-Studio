@@ -222,7 +222,7 @@ export default function WhosWatching() {
                       <label className="text-[11px] font-bold uppercase text-zinc-500 tracking-wider">Choose Avatar Icon</label>
                       <span className="text-[10px] font-mono text-cinema-amber bg-cinema-amber/10 px-1.5 py-0.5 rounded">{selectedAvatar}</span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-black/40 border border-cinema-border/50 rounded-xl">
+                    <div className="grid grid-cols-5 gap-2 max-h-44 overflow-y-auto p-2 bg-black/40 border border-cinema-border/50 rounded-xl">
                       {PRESET_AVATARS.map((avatarName) => {
                         const isSelected = selectedAvatar === avatarName;
                         return (
@@ -230,15 +230,15 @@ export default function WhosWatching() {
                             key={avatarName}
                             type="button"
                             onClick={() => setSelectedAvatar(avatarName)}
-                            className={`aspect-square rounded-lg flex items-center justify-center p-1.5 transition-all outline-none
+                            className={`aspect-square rounded-xl flex items-center justify-center p-1 transition-all outline-none
                               ${isSelected 
-                                ? "bg-cinema-amber text-cinema-bg scale-105 shadow-md font-bold" 
+                                ? "bg-cinema-amber text-cinema-bg scale-105 shadow-md" 
                                 : "bg-[#070712]/60 text-zinc-400 hover:text-white hover:bg-zinc-800"
                               }
                             `}
                             title={avatarName}
                           >
-                            <ProfileAvatar avatar={avatarName} className="w-4.5 h-4.5" />
+                            <ProfileAvatar avatar={avatarName} className="w-8 h-8" />
                           </button>
                         );
                       })}
