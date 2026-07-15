@@ -225,34 +225,44 @@ function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
           }
         }
 
+        const channelArtwork = ch.fanart || ch.poster || prog?.fanart || prog?.poster;
+
         return (
           <div
             key={ch.id}
             onClick={() => onSelectChannel(ch)}
             className="group bg-cinema-card-bg border border-cinema-border rounded-2xl overflow-hidden hover:border-cinema-amber/50 transition-all duration-300 shadow-md hover:shadow-xl cursor-pointer flex flex-col h-full"
           >
-            {/* Colored Logo Channel Box */}
+            {/* Colored Logo / Artwork Channel Box */}
             <div
-              className="h-28 flex items-center justify-between p-5 relative overflow-hidden shrink-0"
+              className="h-28 flex items-center justify-between p-5 relative overflow-hidden shrink-0 bg-cover bg-center bg-no-repeat transition-all duration-500"
               style={{
-                background: `linear-gradient(135deg, ${ch.color} 0%, #0F0F15 100%)`,
+                backgroundImage: channelArtwork ? `url(${channelArtwork})` : undefined,
+                background: channelArtwork ? undefined : `linear-gradient(135deg, ${ch.color} 0%, #0F0F15 100%)`,
               }}
             >
+              {/* Dark overlay for perfect text readability when artwork is displayed */}
+              {channelArtwork && (
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F15]/90 via-[#0F0F15]/50 to-[#0F0F15]/70 z-0" />
+              )}
+              
               <div className="z-10 text-white font-black tracking-tight flex flex-col">
                 <span className="text-xs uppercase opacity-80 tracking-widest font-bold">Channel</span>
                 <span className="text-3xl">{String(ch.channelNumber).padStart(2, "0")}</span>
               </div>
               <div className="z-10 text-right">
-                <div className="text-white font-extrabold text-xl group-hover:text-cinema-amber transition-colors">
+                <div className="text-white font-extrabold text-xl group-hover:text-cinema-amber transition-colors drop-shadow-md">
                   {ch.name}
                 </div>
-                <span className="text-[10px] text-white/80 bg-black/30 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold mt-1 inline-block">
+                <span className="text-[10px] text-white/80 bg-black/50 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold mt-1 inline-block backdrop-blur-xs">
                   🔴 LIVE broadcast
                 </span>
               </div>
-              <div className="absolute -bottom-6 -right-6 text-white/5 font-bold text-8xl pointer-events-none uppercase italic tracking-tighter">
-                CH{ch.channelNumber}
-              </div>
+              {!channelArtwork && (
+                <div className="absolute -bottom-6 -right-6 text-white/5 font-bold text-8xl pointer-events-none uppercase italic tracking-tighter">
+                  CH{ch.channelNumber}
+                </div>
+              )}
             </div>
 
             {/* Now Playing Info */}

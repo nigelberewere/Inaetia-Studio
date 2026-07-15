@@ -98,6 +98,10 @@ export interface Channel {
   color: string;
   channelNumber: number;
   sourceFolder: string;
+  poster?: string | null;
+  fanart?: string | null;
+  hasPoster?: boolean;
+  hasFanart?: boolean;
   currentProgram: {
     id: string;
     title: string;
@@ -106,6 +110,8 @@ export interface Channel {
     startedAt: string;
     endsAt: string;
     offsetSeconds: number;
+    poster?: string | null;
+    fanart?: string | null;
   } | null;
 }
 

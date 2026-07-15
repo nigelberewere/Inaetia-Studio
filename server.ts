@@ -1870,12 +1870,41 @@ function getChannelsList() {
   
   return dirs.map((dir, i) => {
     const id = dir.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    
+    let hasPoster = false;
+    let hasFanart = false;
+    const exts = [".jpg", ".jpeg", ".png", ".webp"];
+    
+    if (fs.existsSync(dir.path)) {
+      try {
+        const files = fs.readdirSync(dir.path);
+        hasPoster = files.some((f) => {
+          const ext = path.extname(f).toLowerCase();
+          if (!exts.includes(ext)) return false;
+          const base = path.basename(f, ext).toLowerCase();
+          return base === "poster" || base === "folder";
+        });
+        hasFanart = files.some((f) => {
+          const ext = path.extname(f).toLowerCase();
+          if (!exts.includes(ext)) return false;
+          const base = path.basename(f, ext).toLowerCase();
+          return base === "fanart" || base === "background";
+        });
+      } catch (err) {
+        console.error(`Error checking artwork for channel folder ${dir.path}:`, err);
+      }
+    }
+
     return {
       id,
       name: dir.name,
       color: channelColors[i % channelColors.length],
       channelNumber: i + 1,
-      sourceFolder: path.resolve(dir.path)
+      sourceFolder: path.resolve(dir.path),
+      poster: hasPoster ? `/api/channels/${id}/poster` : null,
+      fanart: hasFanart ? `/api/channels/${id}/fanart` : null,
+      hasPoster,
+      hasFanart
     };
   });
 }
@@ -1986,6 +2015,70 @@ function getEPGForChannel(channelId: string, startTimestamp: number, hours: numb
 // LIVE TV / CHANNEL API ENDPOINTS
 // ============================================================================
 
+// GET /api/channels/:id/poster
+app.get("/api/channels/:id/poster", (req, res) => {
+  const channelId = req.params.id;
+  const channels = getChannelsList();
+  const channel = channels.find(c => c.id === channelId);
+  if (!channel || !fs.existsSync(channel.sourceFolder)) {
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+  
+  try {
+    const files = fs.readdirSync(channel.sourceFolder);
+    const exts = [".jpg", ".jpeg", ".png", ".webp"];
+    const found = files.find((f) => {
+      const ext = path.extname(f).toLowerCase();
+      if (!exts.includes(ext)) return false;
+      const base = path.basename(f, ext).toLowerCase();
+      return base === "poster" || base === "folder";
+    });
+    if (found) {
+      const posterPath = path.join(channel.sourceFolder, found);
+      res.setHeader("Content-Type", getMimeType(path.extname(posterPath)));
+      return fs.createReadStream(posterPath).pipe(res);
+    }
+  } catch (err) {
+    console.error(`Error streaming channel poster:`, err);
+  }
+  
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/channels/:id/fanart
+app.get("/api/channels/:id/fanart", (req, res) => {
+  const channelId = req.params.id;
+  const channels = getChannelsList();
+  const channel = channels.find(c => c.id === channelId);
+  if (!channel || !fs.existsSync(channel.sourceFolder)) {
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+  
+  try {
+    const files = fs.readdirSync(channel.sourceFolder);
+    const exts = [".jpg", ".jpeg", ".png", ".webp"];
+    const found = files.find((f) => {
+      const ext = path.extname(f).toLowerCase();
+      if (!exts.includes(ext)) return false;
+      const base = path.basename(f, ext).toLowerCase();
+      return base === "fanart" || base === "background";
+    });
+    if (found) {
+      const fanartPath = path.join(channel.sourceFolder, found);
+      res.setHeader("Content-Type", getMimeType(path.extname(fanartPath)));
+      return fs.createReadStream(fanartPath).pipe(res);
+    }
+  } catch (err) {
+    console.error(`Error streaming channel fanart:`, err);
+  }
+  
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
 // GET /api/channels
 app.get("/api/channels", async (req, res) => {
   try {
@@ -2003,7 +2096,9 @@ app.get("/api/channels", async (req, res) => {
           duration: live.currentProgram.duration,
           startedAt: live.startedAt,
           endsAt: live.endsAt,
-          offsetSeconds: live.offsetSeconds
+          offsetSeconds: live.offsetSeconds,
+          poster: live.currentProgram.poster,
+          fanart: live.currentProgram.fanart
         } : null
       };
     });
