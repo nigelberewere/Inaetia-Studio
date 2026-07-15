@@ -20,6 +20,9 @@ export interface MovieMetadata {
   aired?: string | null;
   season?: number | null;
   episode?: number | null;
+  thumb?: string | null;
+  poster?: string | null;
+  fanart?: string | null;
 }
 
 export interface TvShowMetadata {
@@ -29,6 +32,35 @@ export interface TvShowMetadata {
   plot: string | null;
   genres: string[];
   studio: string | null;
+}
+
+// Simple helper to normalize things to array
+function getAsArray(val: any): any[] {
+  if (val === undefined || val === null) return [];
+  if (Array.isArray(val)) return val;
+  return [val];
+}
+
+// Extract string value from parsed XML tags robustly
+function extractStringFromXmlTag(tagValue: any): string | null {
+  if (!tagValue) return null;
+  if (typeof tagValue === "string") return tagValue.trim();
+  if (typeof tagValue === "number") return String(tagValue).trim();
+  if (Array.isArray(tagValue)) {
+    for (const item of tagValue) {
+      const val = extractStringFromXmlTag(item);
+      if (val) return val;
+    }
+  }
+  if (typeof tagValue === "object") {
+    if (tagValue["#text"] !== undefined) {
+      return extractStringFromXmlTag(tagValue["#text"]);
+    }
+    if (tagValue.text !== undefined) {
+      return extractStringFromXmlTag(tagValue.text);
+    }
+  }
+  return null;
 }
 
 export function parseTvShowNfo(nfoPath: string): TvShowMetadata | null {
@@ -91,13 +123,6 @@ export interface ArtworkPaths {
   thumb: string | null;
   banner: string | null;
   logo: string | null;
-}
-
-// Simple helper to normalize things to array
-function getAsArray(val: any): any[] {
-  if (val === undefined || val === null) return [];
-  if (Array.isArray(val)) return val;
-  return [val];
 }
 
 /**
@@ -192,6 +217,36 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
     // Format title
     const title = root.title ? String(root.title).trim() : "";
 
+    // Parse artwork fields from XML
+    let thumb: string | null = null;
+    let poster: string | null = null;
+    let fanart: string | null = null;
+
+    if (root.thumb) {
+      thumb = extractStringFromXmlTag(root.thumb);
+    }
+    if (root.poster) {
+      poster = extractStringFromXmlTag(root.poster);
+    }
+    if (root.fanart) {
+      if (root.fanart.thumb) {
+        fanart = extractStringFromXmlTag(root.fanart.thumb);
+      } else {
+        fanart = extractStringFromXmlTag(root.fanart);
+      }
+    }
+    if (root.art) {
+      if (root.art.poster && !poster) {
+        poster = extractStringFromXmlTag(root.art.poster);
+      }
+      if (root.art.fanart && !fanart) {
+        fanart = extractStringFromXmlTag(root.art.fanart);
+      }
+      if (root.art.thumb && !thumb) {
+        thumb = extractStringFromXmlTag(root.art.thumb);
+      }
+    }
+
     return {
       title,
       originalTitle: root.originaltitle ? String(root.originaltitle).trim() : null,
@@ -210,6 +265,9 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
       aired: root.aired ? String(root.aired).trim() : null,
       season: root.season ? parseInt(root.season, 10) || null : null,
       episode: root.episode ? parseInt(root.episode, 10) || null : null,
+      thumb,
+      poster,
+      fanart
     };
   } catch (err) {
     console.error(`Error parsing NFO file ${nfoPath}:`, err);
@@ -257,7 +315,8 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
     const dir = path.dirname(videoFilePath);
     const ext = path.extname(videoFilePath);
     const videoBase = path.basename(videoFilePath, ext);
-    const exts = [".jpg", ".jpeg", ".png", ".webp"];
+    // Added .tbn for standard sidecar thumbnail support (Kodi, Jellyfin, etc.)
+    const exts = [".jpg", ".jpeg", ".png", ".webp", ".tbn"];
 
     // Check if the directory is a library root directory where multiple loose media files live.
     // If it is, we should not match generic poster/folder/fanart files as they belong to the library parent, not the specific file.
@@ -296,9 +355,19 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
     }
 
     // 3. Locate thumb
+    // Supports standard sidecars: videoBase-thumb, videoBase.thumb, videoBase, videoBase-preview, videoBase.preview
     let thumbPath = fileExistsCaseInsensitive(dir, videoBase + "-thumb", exts);
     if (!thumbPath) {
+      thumbPath = fileExistsCaseInsensitive(dir, videoBase + ".thumb", exts);
+    }
+    if (!thumbPath) {
       thumbPath = fileExistsCaseInsensitive(dir, videoBase, exts);
+    }
+    if (!thumbPath) {
+      thumbPath = fileExistsCaseInsensitive(dir, videoBase + "-preview", exts);
+    }
+    if (!thumbPath) {
+      thumbPath = fileExistsCaseInsensitive(dir, videoBase + ".preview", exts);
     }
     if (!thumbPath && !isLibraryRoot) {
       thumbPath = fileExistsCaseInsensitive(dir, "thumb", exts) ||
@@ -316,6 +385,45 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
     if (!logoPath && !isLibraryRoot) {
       logoPath = fileExistsCaseInsensitive(dir, "logo", exts) ||
                  fileExistsCaseInsensitive(dir, "clearlogo", exts);
+    }
+
+    // 6. Locate NFO specified artwork if available
+    const nfoPath = findNfoFile(videoFilePath);
+    if (nfoPath && fs.existsSync(nfoPath)) {
+      const nfoData = parseNfo(nfoPath);
+      if (nfoData) {
+        const nfoDir = path.dirname(nfoPath);
+        
+        // Resolve NFO specified thumb
+        if (!thumbPath && nfoData.thumb) {
+          const possibleThumb = path.isAbsolute(nfoData.thumb)
+            ? nfoData.thumb
+            : path.join(nfoDir, nfoData.thumb);
+          if (fs.existsSync(possibleThumb)) {
+            thumbPath = possibleThumb;
+          }
+        }
+
+        // Resolve NFO specified poster
+        if (!posterPath && nfoData.poster) {
+          const possiblePoster = path.isAbsolute(nfoData.poster)
+            ? nfoData.poster
+            : path.join(nfoDir, nfoData.poster);
+          if (fs.existsSync(possiblePoster)) {
+            posterPath = possiblePoster;
+          }
+        }
+
+        // Resolve NFO specified fanart
+        if (!fanartPath && nfoData.fanart) {
+          const possibleFanart = path.isAbsolute(nfoData.fanart)
+            ? nfoData.fanart
+            : path.join(nfoDir, nfoData.fanart);
+          if (fs.existsSync(possibleFanart)) {
+            fanartPath = possibleFanart;
+          }
+        }
+      }
     }
 
     // If not found, and we might be inside a Season XX folder (or episode folder), check the parent (TV show level folder)
@@ -388,4 +496,3 @@ export function cleanFilenameTitle(filename: string, ext: string): string {
 
   return title || path.basename(filename, ext);
 }
-

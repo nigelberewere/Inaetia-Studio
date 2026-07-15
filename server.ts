@@ -621,6 +621,17 @@ async function scanAllLibraries() {
       if (cachedItem && cachedItem.size === stat.size && cachedItem.nfoMtime === nfoMtime) {
         // Essential: make sure movie is indexable for stream and artwork retrieval
         moviesIndex.set(cachedItem.id, file);
+        
+        // Dynamically refresh local artwork status to catch newly added or changed sidecar images
+        const artwork = findArtwork(file);
+        cachedItem.hasPoster = !!artwork.poster;
+        cachedItem.hasFanart = !!artwork.fanart;
+        cachedItem.hasThumb = !!artwork.thumb;
+        cachedItem.poster = artwork.poster ? `/api/artwork/${cachedItem.id}/poster` : null;
+        cachedItem.fanart = artwork.fanart ? `/api/artwork/${cachedItem.id}/fanart` : null;
+        cachedItem.thumb = artwork.thumb ? `/api/artwork/${cachedItem.id}/thumb` : `/api/artwork/${cachedItem.id}/thumb`;
+        cachedItem.thumbnail = `/api/artwork/${cachedItem.id}/thumb`;
+
         return cachedItem;
       }
 
@@ -1265,6 +1276,7 @@ function getMimeType(ext: string): string {
     case ".wav": return "audio/wav";
     case ".ogg": return "audio/ogg";
     case ".aac": return "audio/aac";
+    case ".tbn":
     case ".jpg":
     case ".jpeg": return "image/jpeg";
     case ".png": return "image/png";

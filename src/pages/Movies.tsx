@@ -12,7 +12,7 @@ import { formatDuration, formatSize } from "../utils";
 type CategoryType = "all" | "movies" | "tvshows" | "marvel" | "cartoons" | "videos";
 
 export default function Movies() {
-  const { movies, loading, refreshLibrary, setCurrentVideo, continueWatching } = useApp();
+  const { movies, loading, refreshLibrary, triggerRescan, setCurrentVideo, continueWatching } = useApp();
 
   const [activeCategory, setActiveCategory] = useState<CategoryType>("all");
   const [selectedShow, setSelectedShow] = useState<string | null>(null);
@@ -224,7 +224,7 @@ export default function Movies() {
 
         {/* Manual Rescan Trigger */}
         <button
-          onClick={refreshLibrary}
+          onClick={triggerRescan}
           className="self-start md:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-all text-xs font-semibold"
           title="Reload Library Filesystem"
           id="btn-movies-reload"
