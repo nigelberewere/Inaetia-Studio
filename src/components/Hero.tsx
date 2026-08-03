@@ -3,7 +3,7 @@ import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
 import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight, Star, ShieldAlert } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { formatDuration, formatSize, formatCleanDate } from "../utils";
+import { formatDuration, formatSize, formatCleanDate, formatRating } from "../utils";
 import { Badge } from "./common/Badge";
 
 interface HeroProps {
@@ -55,12 +55,20 @@ export default function Hero({ movies = [], movie }: HeroProps) {
   }
 
   const activeMovie = list[currentIndex];
-  const backdropImg = activeMovie.fanart || activeMovie.thumbnail;
+  const backdropImg = 
+    activeMovie.fanart || 
+    (activeMovie.hasFanart ? `/api/artwork/${activeMovie.id}/fanart` : null) || 
+    activeMovie.thumbnail || 
+    activeMovie.poster || 
+    `/api/artwork/${activeMovie.id}/poster`;
   
   // Sanitized date (prefers year if available, falls back to clean added date)
   const cleanYear = formatCleanDate(activeMovie.year);
   const cleanAddedDate = formatCleanDate(activeMovie.added);
   const displayDate = cleanYear || cleanAddedDate;
+
+  // Rating badge normalized & deduped
+  const ratingVal = formatRating(activeMovie.mpaa);
 
   // Extract genre list
   const genresList = activeMovie.genres && activeMovie.genres.length > 0
@@ -96,44 +104,45 @@ export default function Hero({ movies = [], movie }: HeroProps) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 md:p-12 z-10"
+          className="absolute inset-0 w-full h-full overflow-hidden"
         >
-          {/* Background Cinematic Artwork & Apple TV Scrim Gradients */}
-          <div className="absolute inset-0 z-0 overflow-hidden bg-[#07070e]">
+          {/* Background Cinematic Artwork & Apple TV Scrim Gradients (Full Bleed Cover) */}
+          <div className="absolute inset-0 z-0 overflow-hidden bg-[#07070e] w-full h-full">
             <motion.img
               key={backdropImg}
               initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 0.6, scale: 1 }}
+              animate={{ opacity: 0.65, scale: 1 }}
               transition={{ duration: 0.8 }}
               src={backdropImg}
               alt=""
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[10000ms] ease-out"
+              className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-[10000ms] ease-out"
             />
             {/* Multi-stage Apple TV Vignette / Scrim Gradient Overlays for Guaranteed Text Legibility */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#07070e] via-[#07070e]/80 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#07070e] via-[#07070e]/70 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#07070e] via-[#07070e]/50 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#07070e] via-[#07070e]/80 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#07070e] via-[#07070e]/70 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#07070e] via-[#07070e]/50 to-transparent pointer-events-none" />
           </div>
 
           {/* Hero Content Panel with Glassmorphism Scrim */}
-          <div className="relative z-10 max-w-3xl space-y-3 sm:space-y-4 bg-black/40 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-white/10 shadow-2xl backdrop-saturate-150">
-            {/* Indicator Badge */}
-            <div className="flex items-center gap-2">
-              <Badge variant="amber" icon={<Clapperboard className="w-3 h-3" />}>
-                Featured {list.length > 1 && `• ${currentIndex + 1} of ${list.length}`}
-              </Badge>
-              {activeMovie.rating && (
-                <Badge variant="glass" icon={<Star className="w-3 h-3 text-cinema-amber fill-cinema-amber" />}>
-                  {(activeMovie.rating > 10 ? (activeMovie.rating / 10).toFixed(1) : activeMovie.rating.toFixed(1))}
+          <div className="relative z-10 w-full h-full flex flex-col justify-end p-4 sm:p-6 md:p-12 pointer-events-auto">
+            <div className="max-w-3xl space-y-3 sm:space-y-4 bg-black/40 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-white/10 shadow-2xl backdrop-saturate-150">
+              {/* Indicator Badge */}
+              <div className="flex items-center gap-2">
+                <Badge variant="amber" icon={<Clapperboard className="w-3 h-3" />}>
+                  Featured {list.length > 1 && `• ${currentIndex + 1} of ${list.length}`}
                 </Badge>
-              )}
-              {activeMovie.mpaa && (
-                <Badge variant="hd">
-                  {activeMovie.mpaa}
-                </Badge>
-              )}
-            </div>
+                {activeMovie.rating && (
+                  <Badge variant="glass" icon={<Star className="w-3 h-3 text-cinema-amber fill-cinema-amber" />}>
+                    {(activeMovie.rating > 10 ? (activeMovie.rating / 10).toFixed(1) : activeMovie.rating.toFixed(1))}
+                  </Badge>
+                )}
+                {ratingVal && (
+                  <Badge variant="hd">
+                    {ratingVal}
+                  </Badge>
+                )}
+              </div>
 
             {/* Title */}
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow-lg leading-tight">
@@ -228,7 +237,8 @@ export default function Hero({ movies = [], movie }: HeroProps) {
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
+      </motion.div>
       </AnimatePresence>
 
       {/* Slide Navigation Arrows */}

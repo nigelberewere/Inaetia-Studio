@@ -247,13 +247,41 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
       }
     }
 
+    // Parse and deduplicate MPAA rating / certification
+    let rawMpaa: string | null = null;
+    if (root.mpaa) {
+      rawMpaa = String(root.mpaa).trim();
+    } else if (root.certification) {
+      rawMpaa = String(root.certification).trim();
+    }
+    if (rawMpaa) {
+      const parts = rawMpaa.split(/[\/\|,]/).map((p) => p.trim()).filter(Boolean);
+      const cleanTokens: string[] = [];
+      const seenNorm = new Set<string>();
+      for (const part of parts) {
+        let clean = part
+          .replace(/^(US|UK|GB|CA|AU|DE|FR|JP|NL|ES|IT|SE|NO|FI|DK)\s*:\s*/i, "")
+          .replace(/^RATED\s*:\s*/i, "")
+          .replace(/^RATED\s+/i, "")
+          .replace(/^RATED-/i, "")
+          .trim();
+        if (!clean) continue;
+        const norm = clean.toUpperCase().replace(/[^A-Z0-9\-]/g, "");
+        if (norm && !seenNorm.has(norm)) {
+          seenNorm.add(norm);
+          cleanTokens.push(clean);
+        }
+      }
+      rawMpaa = cleanTokens.length > 0 ? cleanTokens[0] : rawMpaa;
+    }
+
     return {
       title,
       originalTitle: root.originaltitle ? String(root.originaltitle).trim() : null,
       year: root.year ? parseInt(root.year, 10) || null : null,
       rating: root.rating ? parseFloat(root.rating) || null : null,
       votes: root.votes ? parseInt(root.votes, 10) || null : null,
-      mpaa: root.mpaa ? String(root.mpaa).trim() : null,
+      mpaa: rawMpaa,
       runtime: runtimeSeconds,
       plot: root.plot ? String(root.plot).trim() : null,
       tagline: root.tagline ? String(root.tagline).trim() : null,

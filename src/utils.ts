@@ -102,3 +102,40 @@ export function pluralize(count: number, singular: string, plural?: string): str
   return `${count} ${count === 1 ? singular : p}`;
 }
 
+export function formatRating(rawRating?: string | null): string | null {
+  if (!rawRating) return null;
+  const str = String(rawRating).trim();
+  if (!str) return null;
+
+  // Split by slashes, pipes, or commas in case multiple certifications/ratings were concatenated
+  const parts = str.split(/[\/\|,]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const cleanTokens: string[] = [];
+  const seenNormalized = new Set<string>();
+
+  for (const part of parts) {
+    // Strip prefixes like "US:", "UK:", "RATED ", "RATED:", "RATED-", etc.
+    let clean = part
+      .replace(/^(US|UK|GB|CA|AU|DE|FR|JP|NL|ES|IT|SE|NO|FI|DK)\s*:\s*/i, "")
+      .replace(/^RATED\s*:\s*/i, "")
+      .replace(/^RATED\s+/i, "")
+      .replace(/^RATED-/i, "")
+      .trim();
+
+    if (!clean) continue;
+
+    // Normalize for comparison (uppercase, strip non-alphanumeric except hyphen)
+    const norm = clean.toUpperCase().replace(/[^A-Z0-9\-]/g, "");
+    if (norm && !seenNormalized.has(norm)) {
+      seenNormalized.add(norm);
+      cleanTokens.push(clean);
+    }
+  }
+
+  if (cleanTokens.length === 0) return null;
+
+  // Return the first clean rating value
+  return cleanTokens[0];
+}
+

@@ -5,7 +5,7 @@ import {
   Play, Clock, HardDrive, Calendar, Star, Tag, X, Award, Youtube, 
   ChevronDown, ChevronUp, Cpu, FileText, Subtitles, Volume2, Film 
 } from "lucide-react";
-import { formatDuration, formatSize, formatCleanDate } from "../utils";
+import { formatDuration, formatSize, formatCleanDate, formatRating } from "../utils";
 import { Badge } from "./common/Badge";
 
 interface MovieDetailModalProps {
@@ -119,9 +119,9 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                     {formatDuration(movie.duration)}
                   </Badge>
                 )}
-                {movie.mpaa && (
+                {formatRating(movie.mpaa) && (
                   <Badge variant="hd">
-                    {movie.mpaa}
+                    {formatRating(movie.mpaa)}
                   </Badge>
                 )}
                 {movie.rating && (
