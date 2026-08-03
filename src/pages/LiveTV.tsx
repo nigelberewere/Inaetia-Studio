@@ -237,13 +237,15 @@ function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
             <div
               className="h-28 flex items-center justify-between p-5 relative overflow-hidden shrink-0 bg-cover bg-center bg-no-repeat transition-all duration-500"
               style={{
-                backgroundImage: channelArtwork ? `url(${channelArtwork})` : undefined,
-                background: channelArtwork ? undefined : `linear-gradient(135deg, ${ch.color} 0%, #0F0F15 100%)`,
+                backgroundColor: ch.color || "#0F0F15",
+                backgroundImage: channelArtwork 
+                  ? `linear-gradient(to top, rgba(15, 15, 21, 0.9), rgba(15, 15, 21, 0.4)), url(${channelArtwork})` 
+                  : `linear-gradient(135deg, ${ch.color || "#E11D48"} 0%, #0F0F15 100%)`,
               }}
             >
               {/* Dark overlay for perfect text readability when artwork is displayed */}
               {channelArtwork && (
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F15]/90 via-[#0F0F15]/50 to-[#0F0F15]/70 z-0" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F15]/80 via-transparent to-[#0F0F15]/40 z-0 pointer-events-none" />
               )}
               
               <div className="z-10 text-white font-black tracking-tight flex flex-col">

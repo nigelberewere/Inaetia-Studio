@@ -520,6 +520,7 @@ async function scanAllLibraries() {
 
   // Clear playlist cache to pick up any additions/deletions on rescan
   playlistCache.clear();
+  cachedChannelsList = null;
 
   // Create fast lookup maps of existing cache items to reuse duration
   const existingMoviesMap = new Map<string, any>();
@@ -1991,11 +1992,18 @@ function getChannelDirectories(): ChannelDir[] {
   return dirs;
 }
 
-function getChannelsList() {
+let cachedChannelsList: any[] | null = null;
+let channelsListLastUpdated = 0;
+
+function getChannelsList(forceRefresh = false) {
+  if (!forceRefresh && cachedChannelsList && (Date.now() - channelsListLastUpdated < 10000)) {
+    return cachedChannelsList;
+  }
+
   const dirs = getChannelDirectories();
   const channelColors = ["#E11D48", "#2563EB", "#059669", "#D97706", "#7C3AED", "#DB2777", "#0891B2"];
   
-  return dirs.map((dir, i) => {
+  const result = dirs.map((dir, i) => {
     const id = dir.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     
     let hasPoster = false;
@@ -2034,6 +2042,10 @@ function getChannelsList() {
       hasFanart
     };
   });
+
+  cachedChannelsList = result;
+  channelsListLastUpdated = Date.now();
+  return result;
 }
 
 function getShuffledPlaylist(channelId: string, dateStr: string, channelSourceFolder: string) {
@@ -2056,9 +2068,8 @@ function getShuffledPlaylist(channelId: string, dateStr: string, channelSourceFo
   return shuffled;
 }
 
-function getLiveProgramAt(channelId: string, timestamp: number) {
-  const channels = getChannelsList();
-  const channel = channels.find(c => c.id === channelId);
+function getLiveProgramAt(channelId: string, timestamp: number, channelOpt?: any) {
+  const channel = channelOpt || getChannelsList().find(c => c.id === channelId);
   if (!channel) return null;
   
   // Use UTC Date for deterministic global synchronization
@@ -2072,7 +2083,7 @@ function getLiveProgramAt(channelId: string, timestamp: number) {
   if (shuffled.length === 0) return null;
   
   const totalRuntime = shuffled.reduce((sum, item) => sum + (item.duration || 120), 0);
-  if (totalRuntime === 0) return null;
+  if (totalRuntime <= 0) return null;
   
   const elapsedSeconds = Math.floor((timestamp - epoch) / 1000);
   const position = ((elapsedSeconds % totalRuntime) + totalRuntime) % totalRuntime;
@@ -2096,7 +2107,8 @@ function getLiveProgramAt(channelId: string, timestamp: number) {
   const offsetSeconds = position - currentSum;
   const loopNumber = Math.floor(elapsedSeconds / totalRuntime);
   const startedAt = new Date(epoch + (loopNumber * totalRuntime + currentSum) * 1000).toISOString();
-  const endsAt = new Date(epoch + (loopNumber * totalRuntime + currentSum + (currentProgram.duration || 120)) * 1000).toISOString();
+  const durSec = Math.max(1, currentProgram.duration || 120);
+  const endsAt = new Date(epoch + (loopNumber * totalRuntime + currentSum + durSec) * 1000).toISOString();
   const nextProgram = shuffled[(activeIndex + 1) % shuffled.length];
   
   return {
@@ -2116,13 +2128,20 @@ function getLiveProgramAt(channelId: string, timestamp: number) {
 function getEPGForChannel(channelId: string, startTimestamp: number, hours: number) {
   const epg: any[] = [];
   const endTimestamp = startTimestamp + hours * 60 * 60 * 1000;
-  
+  const channel = getChannelsList().find(c => c.id === channelId);
+  if (!channel) return epg;
+
   let currentTimestamp = startTimestamp;
-  while (currentTimestamp < endTimestamp) {
-    const live = getLiveProgramAt(channelId, currentTimestamp);
-    if (!live) break;
+  let iterations = 0;
+  const maxIterations = 500; // Safeguard against infinite loops
+
+  while (currentTimestamp < endTimestamp && iterations < maxIterations) {
+    iterations++;
+    const live = getLiveProgramAt(channelId, currentTimestamp, channel);
+    if (!live || !live.endsAt) break;
     
     const programEndsAt = new Date(live.endsAt).getTime();
+    if (isNaN(programEndsAt)) break;
     
     epg.push({
       program: live.currentProgram,
@@ -2130,9 +2149,8 @@ function getEPGForChannel(channelId: string, startTimestamp: number, hours: numb
       endTime: live.endsAt
     });
     
-    // Advance currentTimestamp to the end of the current program
-    // Add 100ms to avoid floating point or boundary loops
-    currentTimestamp = programEndsAt + 100;
+    // Always advance currentTimestamp by at least 1 second beyond currentTimestamp
+    currentTimestamp = Math.max(programEndsAt + 100, currentTimestamp + 1000);
   }
   
   return epg;
