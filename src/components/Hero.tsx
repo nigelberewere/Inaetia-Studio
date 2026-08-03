@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Movie } from "../types";
+import { Movie, HeroRecommendation } from "../types";
 import { useApp } from "../context/AppContext";
-import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight, Star, ShieldAlert } from "lucide-react";
+import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight, Star, ShieldAlert, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { formatDuration, formatSize, formatCleanDate, formatRating } from "../utils";
 import { Badge } from "./common/Badge";
@@ -9,15 +9,20 @@ import { Badge } from "./common/Badge";
 interface HeroProps {
   movies?: Movie[];
   movie?: Movie | null;
+  recommendations?: HeroRecommendation[];
 }
 
-export default function Hero({ movies = [], movie }: HeroProps) {
+export default function Hero({ movies = [], movie, recommendations = [] }: HeroProps) {
   const { setCurrentVideo } = useApp();
   const [showInfo, setShowInfo] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
-  const list = movies.length > 0 ? movies : (movie ? [movie] : []);
+  // If recommendations passed, build list from recommendation movies
+  const recList = recommendations.length > 0 ? recommendations : [];
+  const list = recList.length > 0
+    ? recList.map((r) => r.movie)
+    : (movies.length > 0 ? movies : (movie ? [movie] : []));
 
   // Reset index if list length changes
   useEffect(() => {
@@ -124,14 +129,20 @@ export default function Hero({ movies = [], movie }: HeroProps) {
             <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#07070e] via-[#07070e]/50 to-transparent pointer-events-none" />
           </div>
 
-          {/* Hero Content Panel with Glassmorphism Scrim */}
-          <div className="relative z-10 w-full h-full flex flex-col justify-end p-4 sm:p-6 md:p-12 pointer-events-auto">
-            <div className="max-w-3xl space-y-3 sm:space-y-4 bg-black/40 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-white/10 shadow-2xl backdrop-saturate-150">
+          {/* Hero Content Panel */}
+          <div className="relative z-10 w-full h-full flex flex-col justify-end p-6 sm:p-8 md:p-12 pointer-events-auto">
+            <div className="max-w-3xl space-y-3 sm:space-y-4">
               {/* Indicator Badge */}
-              <div className="flex items-center gap-2">
-                <Badge variant="amber" icon={<Clapperboard className="w-3 h-3" />}>
-                  Featured {list.length > 1 && `• ${currentIndex + 1} of ${list.length}`}
-                </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                {recList[currentIndex]?.whyTag ? (
+                  <Badge variant="amber" icon={<Sparkles className="w-3.5 h-3.5 text-cinema-bg" />}>
+                    {recList[currentIndex].whyTag}
+                  </Badge>
+                ) : (
+                  <Badge variant="amber" icon={<Clapperboard className="w-3 h-3" />}>
+                    Featured {list.length > 1 && `• ${currentIndex + 1} of ${list.length}`}
+                  </Badge>
+                )}
                 {activeMovie.rating && (
                   <Badge variant="glass" icon={<Star className="w-3 h-3 text-cinema-amber fill-cinema-amber" />}>
                     {(activeMovie.rating > 10 ? (activeMovie.rating / 10).toFixed(1) : activeMovie.rating.toFixed(1))}

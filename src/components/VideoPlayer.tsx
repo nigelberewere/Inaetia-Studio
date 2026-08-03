@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect } from "react";
+import Hls from "hls.js";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
 import { safeFetch, normalizeSeriesName } from "../utils";
 import { 
   Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, 
-  RotateCcw, RotateCw, X, Loader2, FastForward, AlertCircle, Clock,
+  RotateCcw, RotateCw, X, Loader2, FastForward, Clock,
   Subtitles, Upload
 } from "lucide-react";
 
@@ -61,6 +62,8 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
+  const savedPositionRef = useRef<number | null>(null);
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -74,29 +77,76 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   const [resumeTime, setResumeTime] = useState<number | null>(null);
   const [showResumeToast, setShowResumeToast] = useState(false);
 
-  // Detect format support
-  const isFormatUnsupported = !movie.extension.toLowerCase().match(/\.(mp4|webm)$/);
-  
-  // Detect Safari / iOS Safari WebKit environment
-  const isSafariOrIOS = React.useMemo(() => {
-    const ua = navigator.userAgent;
-    const isSafari = ua.includes("Safari") && !ua.includes("Chrome") && !ua.includes("Chromium");
-    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    return isSafari || isIOS;
-  }, []);
-
-  const isNeedsRemux = React.useMemo(() => {
-    const extName = movie.extension.toLowerCase();
-    return ![".mp4", ".m4v", ".mov"].includes(extName);
-  }, [movie.id, movie.extension]);
-
-  const isRemuxedSafari = isSafariOrIOS && isNeedsRemux;
-
-  const [showFormatWarning, setShowFormatWarning] = useState(isFormatUnsupported && !isRemuxedSafari);
-
+  // Initialize HLS Engine
   useEffect(() => {
-    setShowFormatWarning(isFormatUnsupported && !isRemuxedSafari);
-  }, [movie.id, isFormatUnsupported, isRemuxedSafari]);
+    const video = videoRef.current;
+    if (!video) return;
+
+    const hlsUrl = `/api/hls/${movie.id}/index.m3u8`;
+
+    // Native HLS support check (Safari on iOS / iPadOS / macOS)
+    const canNativeHls = !!(
+      video.canPlayType("application/vnd.apple.mpegurl") ||
+      video.canPlayType("application/x-mpegURL")
+    );
+
+    if (canNativeHls) {
+      console.log("[VideoPlayer] Native HLS supported (Safari). Setting src directly.");
+      video.src = hlsUrl;
+      video.play().catch(() => {});
+    } else if (Hls.isSupported()) {
+      console.log("[VideoPlayer] hls.js supported. Initializing HLS engine.");
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+      }
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+      });
+
+      hls.loadSource(hlsUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsBuffering(false);
+        if (savedPositionRef.current && savedPositionRef.current > 10) {
+          video.currentTime = savedPositionRef.current;
+        }
+        video.play().catch(() => {});
+      });
+
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn("[hls.js] Network error, attempting load retry...");
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn("[hls.js] Media error, attempting media recovery...");
+              hls.recoverMediaError();
+              break;
+            default:
+              console.error("[hls.js] Unrecoverable HLS error:", data);
+              hls.destroy();
+              break;
+          }
+        }
+      });
+
+      hlsRef.current = hls;
+    } else {
+      video.src = `/api/stream/${movie.id}`;
+    }
+
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [movie.id]);
 
   // Subtitle states
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(!!movie.hasSubtitles);
@@ -198,6 +248,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
           const history = await res.json();
           const savedRecord = history.find((h: any) => h.movieId === movie.id);
           if (savedRecord && savedRecord.position > 10 && !savedRecord.completed) {
+            savedPositionRef.current = savedRecord.position;
             const video = videoRef.current;
             if (video) {
               video.currentTime = savedRecord.position;
@@ -402,10 +453,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
     if (video) {
       const current = video.currentTime;
       setCurrentTime(current);
-      // Auto-dismiss format warning if the video successfully starts playing
-      if (current > 0.5 && showFormatWarning) {
-        setShowFormatWarning(false);
-      }
     }
   };
 
@@ -440,7 +487,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
       {/* Video Tag */}
       <video
         ref={videoRef}
-        src={`/api/stream/${movie.id}`}
         className="w-full h-full max-h-screen object-contain"
         autoPlay
         onPlay={() => setIsPlaying(true)}
@@ -521,32 +567,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
         </div>
       )}
 
-      {/* Warning Alert Banner for MKV/AVI/unsupported formats */}
-      {showFormatWarning && (
-        <div className="absolute top-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-xl z-20 bg-amber-500/15 backdrop-blur-md border border-amber-500/30 text-amber-200 p-3 rounded-lg flex items-start gap-2 text-xs">
-          <AlertCircle className="w-5 h-5 text-cinema-amber shrink-0 mt-0.5" />
-          <div className="space-y-1 flex-1">
-            <div className="flex justify-between items-start">
-              <p className="font-semibold text-cinema-amber">Format Warning: {movie.extension.toUpperCase()}</p>
-              <button 
-                onClick={() => setShowFormatWarning(false)}
-                className="text-amber-400 hover:text-white transition-colors p-0.5 rounded hover:bg-white/10"
-                title="Dismiss Warning"
-                id="btn-dismiss-format-warning"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p>
-              Your browser may not support this container natively. If playback fails, convert this file to H.264 <b>.mp4</b> using:
-            </p>
-            <code className="block bg-black/50 p-1.5 rounded font-mono text-[10px] break-all select-all">
-              ffmpeg -i "{movie.filename}" -c:v libx264 -c:a aac -preset fast output.mp4
-            </code>
-          </div>
-        </div>
-      )}
-
       {/* Custom Video Controls Overlay */}
       <div 
         className={`absolute inset-0 flex flex-col justify-between p-4 md:p-6 bg-gradient-to-t from-black/80 via-transparent to-black/45 transition-opacity duration-300 z-10 ${
@@ -559,12 +579,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
             <span className="text-xs text-cinema-muted tracking-wider uppercase font-medium">NOW STREAMING</span>
             <span className="text-base md:text-lg font-bold text-white drop-shadow-sm flex items-center gap-2">
               {movie.title}
-              {isRemuxedSafari && (
-                <span className="text-[10px] bg-cinema-amber/20 text-cinema-amber border border-cinema-amber/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-cinema-amber animate-ping"></span>
-                  Safari Optimized
-                </span>
-              )}
             </span>
           </div>
 
@@ -589,7 +603,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
               <input
                 type="range"
                 min={0}
-                max={duration || 100}
+                max={duration || movie.duration || 100}
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeekChange}
@@ -597,14 +611,9 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
                 title="Seek Timeline"
               />
               <span className="text-xs font-mono text-cinema-muted w-12 text-left">
-                {formatTime(duration)}
+                {formatTime(duration || movie.duration || 0)}
               </span>
             </div>
-            {isRemuxedSafari && (
-              <div className="text-[10px] text-cinema-amber/80 font-mono font-medium text-center tracking-wider bg-cinema-amber/5 py-0.5 rounded border border-cinema-amber/10 w-fit mx-auto px-2">
-                ⚡ Real-time Remuxed Stream — seeking is approximate
-              </div>
-            )}
           </div>
 
           {/* Buttons and Settings Control Row */}

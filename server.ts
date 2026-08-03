@@ -33,6 +33,17 @@ app.use((req, res, next) => {
 
 import os from "os";
 import { findNfoFile, parseNfo, findArtwork, parseTvShowNfo, parseSeasonEpisode, cleanFilenameTitle } from "./src/nfoReader";
+import { generateRecommendationsForProfile, recomputeTasteProfile } from "./src/recommendationEngine";
+import {
+  HLS_CACHE_ROOT,
+  probeMediaFile,
+  getHlsTranscodeDecision,
+  startOrGetHlsTranscode,
+  ensureHlsPlaylistReady,
+  updateLastAccessed,
+  isHlsFullyCached,
+  runHlsCacheEviction,
+} from "./src/hlsManager";
 
 // Helper to resolve ~ in paths
 function resolveHome(filepath: string): string {
@@ -968,6 +979,22 @@ async function scanAllLibraries() {
   const distinctShows = new Set(episodes.map(e => e.showTitle).filter(Boolean)).size;
 
   console.log(`Scan completed in ${durationMs}ms! Scan complete: ${movies.length} movies (${moviesWithNfo} with rich NFO metadata, ${moviesWithPoster} with posters), ${episodes.length} TV episodes across ${distinctShows} shows`);
+
+  // Asynchronously recompute taste profiles and recommendations for all household profiles
+  try {
+    const profileData = loadProfiles();
+    const profilesList = profileData.profiles || [];
+    if (profilesList.length > 0) {
+      profilesList.forEach((p: any) => {
+        p.tasteProfile = recomputeTasteProfile(p, moviesCache);
+        p.cachedRecommendations = generateRecommendationsForProfile(p, profilesList, moviesCache);
+      });
+      saveProfiles(profileData);
+      console.log(`🎯 Updated recommendation caches for ${profilesList.length} profiles after library scan.`);
+    }
+  } catch (err) {
+    console.error("Error refreshing profile recommendations after scan:", err);
+  }
 }
 
 // Throttled scan execution guard to prevent overlapping concurrent scans
@@ -1160,6 +1187,24 @@ app.post("/api/profiles/:id/history", (req, res) => {
 
   saveProfiles(data);
   res.json(profile.watchHistory[movieId]);
+
+  // Asynchronously trigger taste vector recompute & recommendation refresh in background
+  setTimeout(() => {
+    try {
+      const freshData = loadProfiles();
+      const allP = freshData.profiles || [];
+      const targetP = allP.find((p: any) => p.id === id);
+      if (targetP) {
+        targetP.tasteProfile = recomputeTasteProfile(targetP, moviesCache);
+        const recs = generateRecommendationsForProfile(targetP, allP, moviesCache);
+        targetP.cachedRecommendations = recs;
+        saveProfiles(freshData);
+        console.log(`🎯 Recomputed taste profile and recommendations incrementally for profile ${targetP.name}`);
+      }
+    } catch (e) {
+      console.error("Error incrementally updating recommendations:", e);
+    }
+  }, 50);
 });
 
 // DELETE /api/profiles/:id/history
@@ -1226,6 +1271,48 @@ app.get("/api/profiles/:id/continue", async (req, res) => {
   // Sort by lastWatched descending
   continueItems.sort((a, b) => new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime());
   res.json(continueItems.slice(0, 20));
+});
+
+// GET /api/profiles/:id/recommendations
+app.get("/api/profiles/:id/recommendations", async (req, res) => {
+  await checkCache();
+  const id = req.params.id;
+  const forceRefresh = req.query.refresh === "true";
+  const data = loadProfiles();
+  const profilesList = data.profiles || [];
+  const profile = profilesList.find((p: any) => p.id === id);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  // Check cached recommendations freshness (stale after 12 hours)
+  const cached = profile.cachedRecommendations;
+  const isStale = !cached || !cached.updatedAt || (Date.now() - new Date(cached.updatedAt).getTime() > 12 * 60 * 60 * 1000);
+
+  if (!forceRefresh && !isStale && cached && cached.recommendations && cached.recommendations.length > 0) {
+    return res.json(cached);
+  }
+
+  try {
+    const recData = generateRecommendationsForProfile(profile, profilesList, moviesCache);
+    profile.cachedRecommendations = recData;
+
+    // Record shown items in recentlyShownLog
+    if (!profile.recentlyShownLog) profile.recentlyShownLog = [];
+    recData.recommendations.forEach((rec: any) => {
+      profile.recentlyShownLog.push({ id: rec.movie.id, timestamp: new Date().toISOString() });
+    });
+
+    saveProfiles(data);
+    return res.json(recData);
+  } catch (err: any) {
+    console.error(`Error generating recommendations for profile ${id}:`, err);
+    if (cached && cached.recommendations) {
+      return res.json(cached);
+    }
+    return res.status(500).json({ error: "Failed to generate recommendations", details: err.message });
+  }
 });
 
 // ==========================================
@@ -1308,8 +1395,10 @@ function getMimeType(ext: string): string {
   }
 }
 
-// 3. GET /api/stream/:id
-app.get("/api/stream/:id", (req, res) => {
+// HLS Routes (Single Streaming Pipeline for All Devices)
+
+// GET /api/hls/:id/index.m3u8 - Serves HLS Playlist
+app.get("/api/hls/:id/index.m3u8", async (req, res) => {
   const id = req.params.id;
   const filepath = moviesIndex.get(id);
 
@@ -1317,100 +1406,95 @@ app.get("/api/stream/:id", (req, res) => {
     return res.status(404).json({ error: "Movie ID not found or catalog unindexed" });
   }
 
-  const userAgent = req.headers["user-agent"] || "";
+  const ss = req.query.ss ? parseFloat(req.query.ss as string) : 0;
 
-  if (isSafariClient(userAgent) && needsRemux(filepath)) {
-    console.log(`[REMUX] Safari client detected, remuxing ${path.basename(filepath)} for ${req.ip}`);
-    console.log(`[REMUX] Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+  try {
+    await startOrGetHlsTranscode(id, filepath, { seekOffset: ss });
+    const ready = await ensureHlsPlaylistReady(id, 10000);
 
-    if (activeRemuxCount >= MAX_REMUX_STREAMS) {
-      return res.status(503).json({ 
-        error: "Server busy, too many streams active. Try again shortly." 
-      });
+    if (!ready) {
+      return res.status(500).json({ error: "HLS playlist initialization timed out" });
     }
 
-    const movie = moviesCache.find((m) => m.id === id);
-    const totalSize = movie && movie.size ? movie.size : 1000 * 1024 * 1024; // fallback 1GB
-
-    let startByte = 0;
-    let isProbe = false;
-    if (req.headers.range) {
-      const parts = req.headers.range.replace(/bytes=/, "").split("-");
-      startByte = parseInt(parts[0], 10);
-      const endByte = parts[1] ? parseInt(parts[1], 10) : null;
-      if (startByte === 0 && endByte === 1) {
-        isProbe = true;
-      }
+    const playlistPath = path.join(HLS_CACHE_ROOT, id, "index.m3u8");
+    if (!fs.existsSync(playlistPath)) {
+      return res.status(404).json({ error: "Playlist file not found" });
     }
 
-    if (isProbe) {
-      res.status(206);
-      res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Accept-Ranges", "bytes");
-      res.setHeader("Content-Range", `bytes 0-1/${totalSize}`);
-      res.setHeader("Content-Length", "2");
-      res.send(Buffer.from([0x00, 0x00]));
-      return;
+    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    fs.createReadStream(playlistPath).pipe(res);
+  } catch (err: any) {
+    console.error(`[HLS Route Error] Failed to serve playlist for ${id}:`, err);
+    res.status(500).json({ error: "Failed to generate HLS playlist", details: err.message });
+  }
+});
+
+// GET /api/hls/:id/:file - Serves HLS Segments (.m4s, init.mp4, etc.)
+app.get("/api/hls/:id/:file", (req, res) => {
+  const { id, file } = req.params;
+  const filePath = path.join(HLS_CACHE_ROOT, id, file);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: "HLS segment or artifact not found" });
+  }
+
+  updateLastAccessed(id);
+
+  const ext = path.extname(file).toLowerCase();
+  let mimeType = "application/octet-stream";
+  if (ext === ".m3u8") mimeType = "application/vnd.apple.mpegurl";
+  else if (ext === ".m4s" || ext === ".mp4") mimeType = "video/mp4";
+  else if (ext === ".ts") mimeType = "video/mp2t";
+
+  res.setHeader("Content-Type", mimeType);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  if (ext === ".m4s" || ext === ".mp4" || ext === ".ts") {
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+  } else {
+    res.setHeader("Cache-Control", "no-cache");
+  }
+
+  fs.createReadStream(filePath).pipe(res);
+});
+
+// POST /api/hls/:id/seek - Triggers FFmpeg seek to offset
+app.post("/api/hls/:id/seek", async (req, res) => {
+  const { id } = req.params;
+  const { seekOffset } = req.body || {};
+  const filepath = moviesIndex.get(id);
+
+  if (!filepath) {
+    return res.status(404).json({ error: "Movie ID not found or catalog unindexed" });
+  }
+
+  const offset = parseFloat(seekOffset) || 0;
+  console.log(`[HLS Seek Route] Seek request received for ${id} to ${offset}s`);
+
+  try {
+    await startOrGetHlsTranscode(id, filepath, { seekOffset: offset, forceRestart: true });
+    const ready = await ensureHlsPlaylistReady(id, 10000);
+
+    if (!ready) {
+      return res.status(500).json({ error: "Failed to seek stream" });
     }
 
-    res.status(206);
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Content-Range", `bytes ${startByte}-${totalSize - 1}/${totalSize}`);
-    res.setHeader("Content-Length", totalSize - startByte);
+    res.json({ success: true, playlistUrl: `/api/hls/${id}/index.m3u8` });
+  } catch (err: any) {
+    res.status(500).json({ error: "Seek failed", details: err.message });
+  }
+});
 
-    activeRemuxCount++;
+// GET /api/stream/:id - Legacy direct file range stream
+app.get("/api/stream/:id", (req, res) => {
+  const id = req.params.id;
+  const filepath = moviesIndex.get(id);
 
-    // Optional Seeking support using -ss
-    let startSeconds = 0;
-    if (movie && movie.duration && movie.size && movie.size > 0 && startByte > 500000) {
-      const ratio = startByte / movie.size;
-      startSeconds = Math.floor(ratio * movie.duration);
-      console.log(`[REMUX] Range request received: ${req.headers.range}. Seeking to ${startSeconds}s (Ratio: ${(ratio * 100).toFixed(1)}%)`);
-    }
-
-    const ffmpegArgs: string[] = [];
-    if (startSeconds > 0) {
-      ffmpegArgs.push("-ss", startSeconds.toString());
-    }
-    ffmpegArgs.push(
-      "-i", filepath,        // input file
-      "-c:v", "copy",        // copy video stream (no re-encode)
-      "-c:a", "aac",         // convert audio to AAC (Safari compatible)
-      "-b:a", "192k",        // audio bitrate
-      "-movflags", "frag_keyframe+empty_moov+faststart",
-      "-f", "mp4",           // output format
-      "pipe:1"               // output to stdout
-    );
-
-    const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
-
-    ffmpegProcess.stdout.pipe(res);
-
-    let countDecremented = false;
-    const decrementCount = () => {
-      if (!countDecremented) {
-        activeRemuxCount = Math.max(0, activeRemuxCount - 1);
-        countDecremented = true;
-        console.log(`[REMUX] Stream closed. Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
-      }
-    };
-
-    ffmpegProcess.on("close", decrementCount);
-    ffmpegProcess.on("error", (err) => {
-      console.error("ffmpeg remux error:", err);
-      decrementCount();
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Remux failed" });
-      }
-    });
-
-    req.on("close", () => {
-      ffmpegProcess.kill("SIGKILL");
-      decrementCount();
-    });
-
-    return; // Don't fall through to normal range-request handler
+  if (!filepath) {
+    return res.status(404).json({ error: "Movie ID not found or catalog unindexed" });
   }
 
   const mimeType = getMimeType(path.extname(filepath));
@@ -2360,73 +2444,19 @@ app.get("/api/channels/:id/stream", async (req, res) => {
       return res.status(404).json({ error: "Source file not found for the active broadcast" });
     }
 
-    const userAgent = req.headers["user-agent"] || "";
+    const startSeconds = Math.max(0, Math.floor(live.offsetSeconds || 0));
+    const mediaId = live.currentProgram.id;
 
-    if (isSafariClient(userAgent) && needsRemux(filepath)) {
-      console.log(`[REMUX] Live TV Safari client, remuxing ${path.basename(filepath)} at offset ${live.offsetSeconds}s`);
-      console.log(`[REMUX] Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
+    console.log(`[HLS Live TV] Broadcasting channel ${channelId} (${live.currentProgram.title}) starting at ${startSeconds}s`);
 
-      if (activeRemuxCount >= MAX_REMUX_STREAMS) {
-        return res.status(503).json({ 
-          error: "Server busy, too many streams active. Try again shortly." 
-        });
-      }
+    await startOrGetHlsTranscode(mediaId, filepath, { seekOffset: startSeconds });
+    const ready = await ensureHlsPlaylistReady(mediaId, 10000);
 
-      // Serve remuxed MP4 stream
-      res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Transfer-Encoding", "chunked");
-
-      activeRemuxCount++;
-
-      // Use offsetSeconds to seek on the server so Safari is perfectly in-sync!
-      const startSeconds = Math.max(0, Math.floor(live.offsetSeconds || 0));
-
-      const ffmpegArgs: string[] = [];
-      if (startSeconds > 0) {
-        ffmpegArgs.push("-ss", startSeconds.toString());
-      }
-      ffmpegArgs.push(
-        "-i", filepath,        // input file
-        "-c:v", "copy",        // copy video stream (no re-encode)
-        "-c:a", "aac",         // convert audio to AAC (Safari compatible)
-        "-b:a", "192k",        // audio bitrate
-        "-movflags", "frag_keyframe+empty_moov+faststart",
-        "-f", "mp4",           // output format
-        "pipe:1"               // output to stdout
-      );
-
-      const ffmpegProcess = spawn("ffmpeg", ffmpegArgs);
-
-      ffmpegProcess.stdout.pipe(res);
-
-      let countDecremented = false;
-      const decrementCount = () => {
-        if (!countDecremented) {
-          activeRemuxCount = Math.max(0, activeRemuxCount - 1);
-          countDecremented = true;
-          console.log(`[REMUX] Live TV Stream closed. Active remux streams: ${activeRemuxCount}/${MAX_REMUX_STREAMS}`);
-        }
-      };
-
-      ffmpegProcess.on("close", decrementCount);
-      ffmpegProcess.on("error", (err) => {
-        console.error("ffmpeg Live TV remux error:", err);
-        decrementCount();
-        if (!res.headersSent) {
-          res.status(500).json({ error: "Live TV Remux failed" });
-        }
-      });
-
-      req.on("close", () => {
-        ffmpegProcess.kill("SIGKILL");
-        decrementCount();
-      });
-
-      return;
+    if (ready) {
+      res.redirect(`/api/hls/${mediaId}/index.m3u8`);
+    } else {
+      res.status(500).json({ error: "Failed to initialize Live TV stream" });
     }
-
-    const mimeType = getMimeType(path.extname(filepath));
-    streamMediaFile(filepath, mimeType, req, res);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to stream live program", details: err.message });
   }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, RadioStation } from "../types";
+import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, RadioStation, HeroRecommendation } from "../types";
 import { safeFetch } from "../utils";
 
 export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
@@ -67,6 +67,8 @@ interface AppContextType {
   clearProfileHistory: () => Promise<void>;
   continueWatching: WatchHistoryItem[];
   fetchContinueWatching: () => Promise<void>;
+  recommendations: HeroRecommendation[];
+  fetchRecommendations: () => Promise<void>;
 
   // Setup Wizard States
   setupComplete: boolean;
@@ -95,6 +97,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState<boolean>(true);
   const [continueWatching, setContinueWatching] = useState<WatchHistoryItem[]>([]);
+  const [recommendations, setRecommendations] = useState<HeroRecommendation[]>([]);
+
+  // Fetch recommendations for current profile
+  const fetchRecommendations = async () => {
+    if (!currentProfile) {
+      setRecommendations([]);
+      return;
+    }
+    try {
+      const res = await safeFetch(`/api/profiles/${currentProfile.id}/recommendations`);
+      if (res.ok) {
+        const data = await res.json();
+        setRecommendations(data.recommendations || []);
+      }
+    } catch (err) {
+      console.error("Error fetching recommendations:", err);
+    }
+  };
 
   // Fetch all profiles
   const fetchProfiles = async () => {
@@ -471,6 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchContinueWatching();
+    fetchRecommendations();
   }, [currentProfile]);
 
   return (
@@ -524,6 +545,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearProfileHistory,
         continueWatching,
         fetchContinueWatching,
+        recommendations,
+        fetchRecommendations,
         setupComplete,
         setSetupComplete,
         themeColor,

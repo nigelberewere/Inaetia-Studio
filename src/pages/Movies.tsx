@@ -30,7 +30,27 @@ export default function Movies() {
   const [activeDetailMovie, setActiveDetailMovie] = useState<Movie | null>(null);
 
   // Layout & Filter States
-  const [viewMode, setViewMode] = useState<ViewMode>("poster");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try {
+      const saved = localStorage.getItem("cinema_view_mode");
+      if (saved === "poster" || saved === "landscape" || saved === "list") {
+        return saved;
+      }
+    } catch {
+      // Storage unavailable
+    }
+    return "poster";
+  });
+
+  const changeViewMode = (mode: ViewMode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("cinema_view_mode", mode);
+    } catch {
+      // Storage unavailable
+    }
+  };
+
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [decadeFilter, setDecadeFilter] = useState<DecadeFilter>("all");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
@@ -475,31 +495,34 @@ export default function Movies() {
         </div>
 
         {/* Right Controls: Grid/Layout View Mode Toggles */}
-        <div className="flex items-center gap-1 bg-black/40 border border-white/10 p-1 rounded-xl">
+        <div className="flex items-center gap-1 bg-black/40 border border-white/10 p-1 rounded-xl" id="viewmode-toggle-group">
           <button
-            onClick={() => setViewMode("poster")}
+            onClick={() => changeViewMode("poster")}
             className={`p-2 rounded-lg transition-all cursor-pointer ${
               viewMode === "poster" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
             }`}
             title="Poster Grid View"
+            id="btn-viewmode-poster"
           >
             <LayoutGrid className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setViewMode("landscape")}
+            onClick={() => changeViewMode("landscape")}
             className={`p-2 rounded-lg transition-all cursor-pointer ${
               viewMode === "landscape" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
             }`}
             title="Landscape Card View"
+            id="btn-viewmode-landscape"
           >
             <Columns className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setViewMode("list")}
+            onClick={() => changeViewMode("list")}
             className={`p-2 rounded-lg transition-all cursor-pointer ${
               viewMode === "list" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
             }`}
             title="Detailed List View"
+            id="btn-viewmode-list"
           >
             <List className="w-4 h-4" />
           </button>
@@ -515,43 +538,128 @@ export default function Movies() {
               <Tv className="w-5 h-5 text-cinema-amber" />
               {pluralize(filteredContent.showsList.length, "TV Series", "TV Series")}
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-              {filteredContent.showsList.map((show) => {
-                const firstEpisode = show.episodes[0];
-                return (
-                  <div
-                    key={show.name}
-                    onClick={() => handleOpenShow(show.name)}
-                    className="group relative bg-cinema-card rounded-xl overflow-hidden border border-cinema-border cursor-pointer flex flex-col movie-card-hover"
-                    id={`series-card-${show.name.replace(/\s+/g, "-")}`}
-                  >
-                    <div className="relative aspect-[2/3] w-full overflow-hidden bg-black/40">
+
+            {/* Poster View */}
+            {viewMode === "poster" && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                {filteredContent.showsList.map((show) => {
+                  const firstEpisode = show.episodes[0];
+                  return (
+                    <div
+                      key={show.name}
+                      onClick={() => handleOpenShow(show.name)}
+                      className="group relative bg-cinema-card rounded-xl overflow-hidden border border-cinema-border cursor-pointer flex flex-col movie-card-hover"
+                      id={`series-card-${show.name.replace(/\s+/g, "-")}`}
+                    >
+                      <div className="relative aspect-[2/3] w-full overflow-hidden bg-black/40">
+                        <img
+                          src={`/api/show-poster/${encodeURIComponent(show.name)}?firstEpisodeId=${firstEpisode?.id || ""}`}
+                          alt={show.name}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <span className="absolute top-2 right-2 px-2 py-0.5 bg-cinema-amber text-cinema-bg rounded text-[10px] font-black uppercase tracking-wider">
+                          Series
+                        </span>
+                      </div>
+                      <div className="p-3 md:p-4 flex flex-col flex-1 justify-between gap-2">
+                        <h3 className="font-bold text-sm md:text-base text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
+                          {show.name}
+                        </h3>
+                        <div className="flex items-center justify-between text-xs text-cinema-muted font-medium mt-auto">
+                          <span>{pluralize(show.episodes.length, "Episode")}</span>
+                          <span className="flex items-center text-cinema-amber gap-0.5 text-[10px] uppercase font-bold tracking-wider">
+                            Browse <ChevronRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Landscape View */}
+            {viewMode === "landscape" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredContent.showsList.map((show) => {
+                  const firstEpisode = show.episodes[0];
+                  return (
+                    <div
+                      key={show.name}
+                      onClick={() => handleOpenShow(show.name)}
+                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer appletv-card shadow-xl flex flex-col justify-end p-4"
+                      id={`series-card-${show.name.replace(/\s+/g, "-")}`}
+                    >
                       <img
                         src={`/api/show-poster/${encodeURIComponent(show.name)}?firstEpisodeId=${firstEpisode?.id || ""}`}
                         alt={show.name}
-                        loading="lazy"
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
-                      <span className="absolute top-2 right-2 px-2 py-0.5 bg-cinema-amber text-cinema-bg rounded text-[10px] font-black uppercase tracking-wider">
-                        Series
-                      </span>
-                    </div>
-                    <div className="p-3 md:p-4 flex flex-col flex-1 justify-between gap-2">
-                      <h3 className="font-bold text-sm md:text-base text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
-                        {show.name}
-                      </h3>
-                      <div className="flex items-center justify-between text-xs text-cinema-muted font-medium mt-auto">
-                        <span>{pluralize(show.episodes.length, "Episode")}</span>
-                        <span className="flex items-center text-cinema-amber gap-0.5 text-[10px] uppercase font-bold tracking-wider">
-                          Browse <ChevronRight className="w-3 h-3" />
-                        </span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                      <div className="relative z-10 space-y-1">
+                        <Badge variant="amber" size="sm">
+                          TV Series
+                        </Badge>
+                        <h3 className="font-extrabold text-lg text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
+                          {show.name}
+                        </h3>
+                        <div className="flex items-center justify-between text-xs text-cinema-muted font-medium">
+                          <span>{pluralize(show.episodes.length, "Episode")}</span>
+                          <span className="flex items-center text-cinema-amber gap-0.5 text-[10px] uppercase font-bold tracking-wider">
+                            Browse Episodes <ChevronRight className="w-3 h-3" />
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* List View */}
+            {viewMode === "list" && (
+              <div className="space-y-3">
+                {filteredContent.showsList.map((show) => {
+                  const firstEpisode = show.episodes[0];
+                  return (
+                    <div
+                      key={show.name}
+                      onClick={() => handleOpenShow(show.name)}
+                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md appletv-card"
+                      id={`series-card-${show.name.replace(/\s+/g, "-")}`}
+                    >
+                      <img
+                        src={`/api/show-poster/${encodeURIComponent(show.name)}?firstEpisodeId=${firstEpisode?.id || ""}`}
+                        alt={show.name}
+                        className="w-16 h-20 object-cover rounded-xl border border-white/10 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-1.5 py-0.5 bg-cinema-amber/10 text-cinema-amber border border-cinema-amber/20 rounded text-[10px] font-bold uppercase">
+                            TV Series
+                          </span>
+                          <span className="text-xs text-cinema-muted font-medium">
+                            {pluralize(show.episodes.length, "Episode")}
+                          </span>
+                        </div>
+                        <h3 className="font-extrabold text-base text-white line-clamp-1 break-words leading-snug group-hover:text-cinema-amber transition-colors">
+                          {show.name}
+                        </h3>
+                      </div>
+                      <button
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cinema-amber text-cinema-bg font-bold text-xs hover:brightness-110 transition-all cursor-pointer shrink-0"
+                      >
+                        Browse Episodes
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -661,18 +769,93 @@ export default function Movies() {
                 <Film className="w-5 h-5 text-cinema-amber" />
                 {sub} ({videoList.length})
               </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                {videoList.map((video) => {
-                  const CardItem = MovieCard as any;
-                  return (
-                    <CardItem 
+
+              {viewMode === "poster" && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                  {videoList.map((video) => (
+                    <MovieCard 
                       key={video.id} 
                       movie={video} 
                       onClick={() => setActiveDetailMovie(video)}
                     />
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
+
+              {viewMode === "landscape" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {videoList.map((video) => (
+                    <div
+                      key={video.id}
+                      onClick={() => setActiveDetailMovie(video)}
+                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer appletv-card shadow-xl flex flex-col justify-end p-4"
+                    >
+                      <img
+                        src={video.fanart || video.thumbnail || `/api/artwork/${video.id}/poster`}
+                        alt={video.title}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                      <div className="relative z-10 space-y-1">
+                        <Badge variant="amber" size="sm">
+                          {video.extension.replace(".", "")}
+                        </Badge>
+                        <h3 className="font-extrabold text-lg text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
+                          {video.title}
+                        </h3>
+                        <div className="flex items-center gap-3 text-xs text-cinema-muted">
+                          {video.duration > 0 && <span>{formatDuration(video.duration)}</span>}
+                          {video.size > 0 && <span>• {formatSize(video.size)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {viewMode === "list" && (
+                <div className="space-y-3">
+                  {videoList.map((video) => (
+                    <div
+                      key={video.id}
+                      onClick={() => setActiveDetailMovie(video)}
+                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md appletv-card"
+                    >
+                      <img
+                        src={video.poster || video.thumbnail}
+                        alt={video.title}
+                        className="w-16 h-20 object-cover rounded-xl border border-white/10 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h3 className="font-extrabold text-base text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
+                          {video.title}
+                        </h3>
+                        <p className="text-xs text-cinema-muted line-clamp-1">
+                          {video.plot || video.tagline || video.filename}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs text-cinema-muted">
+                          <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] font-bold uppercase">
+                            {video.extension.replace(".", "")}
+                          </span>
+                          {video.duration > 0 && <span>{formatDuration(video.duration)}</span>}
+                          {video.size > 0 && <span>{formatSize(video.size)}</span>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentVideo(video);
+                        }}
+                        className="p-3 rounded-xl bg-cinema-amber text-cinema-bg font-bold hover:scale-105 transition-all cursor-pointer shrink-0"
+                        title="Play Immediately"
+                      >
+                        <Play className="w-4 h-4 fill-cinema-bg" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           );
         })}

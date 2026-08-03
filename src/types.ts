@@ -153,6 +153,35 @@ export interface WatchHistoryItem extends WatchHistoryDetails {
   added?: string;
 }
 
+export interface TasteProfile {
+  updatedAt: string;
+  isColdStart: boolean;
+  watchCount: number;
+  genres: Record<string, number>;
+  actors: Record<string, number>;
+  directors: Record<string, number>;
+  tags: Record<string, number>;
+  studios: Record<string, number>;
+  decades: Record<string, number>;
+}
+
+export interface HeroRecommendation {
+  movie: Movie;
+  score: number;
+  whyTag: string;
+}
+
+export interface ProfileRecommendationData {
+  updatedAt: string;
+  isColdStart: boolean;
+  recommendations: HeroRecommendation[];
+}
+
+export interface RecentlyShownLog {
+  id: string;
+  timestamp: string;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -160,6 +189,9 @@ export interface Profile {
   color: string;
   createdAt: string;
   watchHistory: Record<string, WatchHistoryDetails>;
+  recentlyShownLog?: RecentlyShownLog[];
+  tasteProfile?: TasteProfile;
+  cachedRecommendations?: ProfileRecommendationData;
   preferences: {
     defaultSort: string;
     defaultView: string;

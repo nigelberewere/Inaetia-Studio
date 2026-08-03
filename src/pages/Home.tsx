@@ -7,7 +7,7 @@ import { Flame, Film, Disc, Clock } from "lucide-react";
 import { Movie } from "../types";
 
 export default function Home() {
-  const { movies, loading, error, continueWatching } = useApp();
+  const { movies, loading, error, continueWatching, recommendations } = useApp();
   const [activeDetailMovie, setActiveDetailMovie] = React.useState<Movie | null>(null);
 
   // Pick up to 6 featured movies dynamically using a scoring algorithm
@@ -94,7 +94,7 @@ export default function Home() {
   return (
     <div className="space-y-12 pb-24" id="home-view-page">
       {/* Cinematic Hero */}
-      <Hero movies={featuredMovies} />
+      <Hero movies={featuredMovies} recommendations={recommendations} />
 
       {/* 0. CONTINUE WATCHING ROW */}
       <section className="space-y-4" id="home-row-continue">
