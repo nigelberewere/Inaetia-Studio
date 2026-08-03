@@ -1943,52 +1943,79 @@ interface ChannelDir {
 function getChannelDirectories(): ChannelDir[] {
   const dirs: ChannelDir[] = [];
   
-  // Scan all movies, tv shows, and other video folders
-  const allVideoPaths = [
-    ...parsePathsEnv(process.env.MOVIES_PATHS, process.env.VIDEOS_PATH || "media/Videos"),
-    ...parsePathsEnv(process.env.TV_SHOWS_PATHS, process.env.VIDEOS_PATH || "media/Videos"),
-    ...parsePathsEnv(process.env.OTHER_VIDEOS_PATHS, process.env.VIDEOS_PATH || "media/Videos")
-  ];
+  const addChannelDir = (dirPath: string, customName?: string, isMusicVid?: boolean) => {
+    if (!dirPath) return;
+    const resolvedPath = path.resolve(resolveHome(dirPath));
+    if (!fs.existsSync(resolvedPath)) return;
 
-  // De-duplicate paths
-  const uniquePaths = Array.from(new Set(allVideoPaths.map(p => path.resolve(resolveHome(p)))));
+    // Check if this path is already added OR is a subfolder/child of an already added channel path
+    const isSubfolderOfExisting = dirs.some(d => {
+      const existingResolved = path.resolve(d.path);
+      return resolvedPath === existingResolved || resolvedPath.startsWith(existingResolved + path.sep);
+    });
 
-  uniquePaths.forEach(videoDir => {
-    if (fs.existsSync(videoDir)) {
-      try {
-        const subfolders = fs.readdirSync(videoDir, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith("."))
-          .map(dirent => dirent.name);
-        
-        subfolders.forEach(name => {
-          const fullPath = path.join(videoDir, name);
-          const alreadyAdded = dirs.some(d => path.resolve(d.path) === path.resolve(fullPath));
-          if (!alreadyAdded) {
-            dirs.push({
-              name,
-              path: fullPath
-            });
-          }
-        });
-      } catch (err) {
-        console.error(`Error scanning subfolders in ${videoDir}:`, err);
+    if (isSubfolderOfExisting) {
+      return;
+    }
+
+    const name = customName || path.basename(resolvedPath) || "Channel";
+
+    dirs.push({
+      name,
+      path: resolvedPath,
+      isMusicVideos: isMusicVid
+    });
+  };
+
+  // 1. Explicitly configured media directory paths
+  const moviePaths = parsePathsEnv(process.env.MOVIES_PATHS, "");
+  const tvPaths = parsePathsEnv(process.env.TV_SHOWS_PATHS, "");
+  const otherPaths = parsePathsEnv(process.env.OTHER_VIDEOS_PATHS, "");
+  const musicVideoPath = process.env.MUSIC_VIDEOS_PATH;
+
+  moviePaths.forEach(p => addChannelDir(p));
+  tvPaths.forEach(p => addChannelDir(p));
+  otherPaths.forEach(p => addChannelDir(p));
+  if (musicVideoPath) addChannelDir(musicVideoPath, "Music Videos", true);
+
+  // 2. Container video paths (e.g. process.env.VIDEOS_PATH or media/Videos)
+  const videoContainers = [
+    process.env.VIDEOS_PATH || "",
+    path.join(process.cwd(), "media/Videos")
+  ].filter(Boolean);
+
+  videoContainers.forEach(container => {
+    const resolvedContainer = path.resolve(resolveHome(container));
+    if (fs.existsSync(resolvedContainer)) {
+      // Check if container itself is already added or inside an added dir
+      const containerAlreadyAdded = dirs.some(d => {
+        const existingResolved = path.resolve(d.path);
+        return resolvedContainer === existingResolved || resolvedContainer.startsWith(existingResolved + path.sep);
+      });
+
+      if (!containerAlreadyAdded) {
+        try {
+          const subentries = fs.readdirSync(resolvedContainer, { withFileTypes: true });
+          subentries.forEach(entry => {
+            if (entry.isDirectory() && !entry.name.startsWith(".")) {
+              const fullPath = path.join(resolvedContainer, entry.name);
+              addChannelDir(fullPath);
+            }
+          });
+        } catch (err) {
+          console.error(`Error scanning container ${resolvedContainer}:`, err);
+        }
       }
     }
   });
-  
-  // 2. Check if process.env.MUSIC_VIDEOS_PATH exists and is not already included
-  const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
-  if (envMusicVideos && fs.existsSync(envMusicVideos)) {
-    const alreadyAdded = dirs.some(d => path.resolve(d.path) === path.resolve(envMusicVideos));
-    if (!alreadyAdded) {
-      dirs.push({
-        name: "Music Videos",
-        path: envMusicVideos,
-        isMusicVideos: true
-      });
-    }
+
+  // Fallback: If no channel directories were found from subfolders, add container directories themselves
+  if (dirs.length === 0) {
+    videoContainers.forEach(container => {
+      addChannelDir(container, "Main Channel");
+    });
   }
-  
+
   return dirs;
 }
 
