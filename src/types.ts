@@ -116,6 +116,7 @@ export interface Channel {
     offsetSeconds: number;
     poster?: string | null;
     fanart?: string | null;
+    thumbnail?: string | null;
   } | null;
 }
 

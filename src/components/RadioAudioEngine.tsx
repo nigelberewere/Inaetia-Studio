@@ -33,7 +33,7 @@ export default function RadioAudioEngine() {
       const isCurrentStationStream = audio.src.includes(`/api/radio/stations/${activeStation.id}/stream`);
       const isSameTrack = currentTrackIdRef.current === radioTrack.id;
       
-      if (!isCurrentStationStream || !isSameTrack) {
+      if (!isCurrentStationStream || !isSameTrack || audio.ended) {
         currentTrackIdRef.current = radioTrack.id;
         audio.src = streamUrl;
         audio.load();
@@ -67,6 +67,13 @@ export default function RadioAudioEngine() {
     try {
       // Re-tune to current station to synchronize track and offset
       await tuneToStation(activeStation.id);
+      
+      // If server returned same track (due to boundary sub-second offset), retry in 800ms
+      setTimeout(async () => {
+        if (activeStation) {
+          await tuneToStation(activeStation.id);
+        }
+      }, 800);
       
       // Dispatch custom event to notify bottom player/toast
       window.dispatchEvent(new CustomEvent("radio-toast-notify", {

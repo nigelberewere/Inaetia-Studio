@@ -184,11 +184,174 @@ function LiveTVContent() {
 }
 
 // ═══════════════════════════════════════
-// SUB-COMPONENT: CHANNELS GRID
+// SUB-COMPONENT: CHANNELS GRID & CARD ITEM
 // ═══════════════════════════════════════
 interface ChannelsGridProps {
   channels: Channel[];
   onSelectChannel: (channel: Channel) => void;
+}
+
+interface ChannelCardItemProps {
+  ch: Channel;
+  onSelectChannel: (c: Channel) => void;
+  key?: React.Key;
+}
+
+function ChannelCardItem({ ch, onSelectChannel }: ChannelCardItemProps) {
+  const [imgError, setImgError] = useState(false);
+  const prog = ch.currentProgram;
+
+  let progressPercent = 0;
+  let timeRemainingStr = "";
+
+  if (prog && prog.startedAt && prog.endsAt) {
+    const start = new Date(prog.startedAt).getTime();
+    const end = new Date(prog.endsAt).getTime();
+    if (start > 0 && end > start) {
+      const total = end - start;
+      const elapsed = Date.now() - start;
+      progressPercent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+
+      const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      const mins = Math.floor(remainingSeconds / 60);
+      timeRemainingStr = mins > 0 ? `${mins}m left` : "Ending now";
+    }
+  }
+
+  // Priority 1: Thumbnail/Frame from currently playing video item
+  // Priority 2: Fanart or Poster of currently playing item
+  // Priority 3: Channel folder poster or fanart if present
+  const artworkUrl = 
+    prog?.thumbnail || 
+    (prog?.id ? `/api/thumbnail/${prog.id}` : null) || 
+    prog?.fanart || 
+    prog?.poster || 
+    (ch.hasFanart ? ch.fanart : null) || 
+    (ch.hasPoster ? ch.poster : null);
+
+  const showRealThumbnail = artworkUrl && !imgError;
+
+  return (
+    <div
+      onClick={() => onSelectChannel(ch)}
+      className="group bg-cinema-card-bg border border-cinema-border rounded-2xl overflow-hidden hover:border-cinema-amber/60 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-pointer flex flex-col h-full relative"
+      id={`channel-card-${ch.id}`}
+    >
+      {/* Tile Artwork Banner (16:9 Aspect ratio frame) */}
+      <div className="relative h-36 sm:h-40 w-full overflow-hidden shrink-0 bg-zinc-950 flex items-center justify-center">
+        {showRealThumbnail ? (
+          <>
+            <img
+              src={artworkUrl}
+              alt={ch.name}
+              loading="lazy"
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
+            />
+            {/* Gradient Dark Overlay for text legibility */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F15] via-[#0F0F15]/30 to-black/40" />
+          </>
+        ) : (
+          /* Designed Branded Placeholder Treatment for Channels without valid image */
+          <div 
+            className="w-full h-full p-4 flex flex-col justify-between relative overflow-hidden"
+            style={{
+              background: `radial-gradient(circle at top right, ${ch.color || "#E11D48"}40, transparent 75%), linear-gradient(135deg, #18181b 0%, #09090b 100%)`
+            }}
+          >
+            {/* Geometric Grid Pattern */}
+            <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none" />
+            
+            <div className="flex items-center justify-between z-10">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="p-2 rounded-xl border border-white/10 shadow-inner"
+                  style={{ backgroundColor: `${ch.color || "#E11D48"}45` }}
+                >
+                  <Tv className="w-5 h-5 text-cinema-amber" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/70">
+                  Broadcast Network
+                </span>
+              </div>
+            </div>
+
+            <div className="z-10 flex items-end justify-between">
+              <div>
+                <span className="text-[10px] font-bold text-cinema-amber uppercase tracking-wider block">Linear TV Channel</span>
+                <h4 className="text-lg font-extrabold text-white tracking-tight leading-none mt-0.5">{ch.name}</h4>
+              </div>
+              <span className="text-2xl font-black text-white/30 tracking-tighter">
+                #{String(ch.channelNumber).padStart(2, "0")}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Channel Logo "Bug" Overlay (Top-Right Broadcast Badge) */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/75 border border-white/20 backdrop-blur-md shadow-lg select-none">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-sm shadow-red-500/80" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-white">
+            CH {String(ch.channelNumber).padStart(2, "0")}
+          </span>
+        </div>
+
+        {/* Live Indicator Watermark Bug (Bottom-Left) */}
+        <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-1.5">
+          <span className="px-2 py-0.5 rounded-md bg-cinema-amber/90 text-cinema-bg font-black text-[9px] uppercase tracking-wider shadow-md">
+            🔴 LIVE
+          </span>
+          <span className="text-xs font-black text-white drop-shadow-md">
+            {ch.name}
+          </span>
+        </div>
+      </div>
+
+      {/* Extended Progress Bar & Now Playing Information (Extended to EVERY Card) */}
+      <div className="p-4 flex-1 flex flex-col justify-between space-y-3 bg-cinema-card-bg">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] uppercase font-extrabold tracking-widest">
+            <span className="text-cinema-amber flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-cinema-amber animate-pulse" />
+              Now Playing
+            </span>
+            <span className="text-gray-400 font-bold">CH {String(ch.channelNumber).padStart(2, "0")}</span>
+          </div>
+
+          <h3 className="text-white font-bold text-sm leading-snug line-clamp-2 break-words group-hover:text-cinema-amber transition-colors" title={prog?.title || ch.name}>
+            {prog?.title || `${ch.name} Linear Broadcast`}
+          </h3>
+
+          <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
+            <Clock className="h-3.5 w-3.5 text-cinema-amber/80 shrink-0" />
+            <span className="truncate">
+              {prog?.startedAt && prog?.endsAt
+                ? `${formatTimeSafe(prog.startedAt)} - ${formatTimeSafe(prog.endsAt)}`
+                : "24/7 Linear Stream"}
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar Container - Rendered on EVERY card */}
+        <div className="pt-3 border-t border-cinema-border/50 space-y-1.5">
+          <div className="flex justify-between items-center text-[10px] font-medium">
+            <span className="text-gray-400">
+              {prog ? `${Math.round(progressPercent)}% completed` : "Signal Active"}
+            </span>
+            <span className="font-semibold text-cinema-amber">
+              {timeRemainingStr || "On Air"}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
+            <div
+              className="h-full bg-cinema-amber transition-all duration-1000 shadow-sm shadow-cinema-amber/50"
+              style={{ width: `${Math.max(4, progressPercent)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
@@ -206,105 +369,9 @@ function ChannelsGrid({ channels, onSelectChannel }: ChannelsGridProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {channels.map((ch) => {
-        const prog = ch.currentProgram;
-        let progressPercent = 0;
-        let timeRemainingStr = "";
-
-        if (prog) {
-          const start = prog.startedAt ? new Date(prog.startedAt).getTime() : 0;
-          const end = prog.endsAt ? new Date(prog.endsAt).getTime() : 0;
-          if (start > 0 && end > start) {
-            const total = end - start;
-            const elapsed = Date.now() - start;
-            progressPercent = Math.min(100, Math.max(0, (elapsed / total) * 100));
-
-            const remainingSeconds = Math.max(0, Math.floor((end - Date.now()) / 1000));
-            const mins = Math.floor(remainingSeconds / 60);
-            timeRemainingStr = mins > 0 ? `${mins}m left` : "Ending now";
-          }
-        }
-
-        const channelArtwork = ch.fanart || ch.poster || prog?.fanart || prog?.poster;
-
-        return (
-          <div
-            key={ch.id}
-            onClick={() => onSelectChannel(ch)}
-            className="group bg-cinema-card-bg border border-cinema-border rounded-2xl overflow-hidden hover:border-cinema-amber/50 transition-all duration-300 shadow-md hover:shadow-xl cursor-pointer flex flex-col h-full"
-          >
-            {/* Colored Logo / Artwork Channel Box */}
-            <div
-              className="h-28 flex items-center justify-between p-5 relative overflow-hidden shrink-0 bg-cover bg-center bg-no-repeat transition-all duration-500"
-              style={{
-                backgroundColor: ch.color || "#0F0F15",
-                backgroundImage: channelArtwork 
-                  ? `linear-gradient(to top, rgba(15, 15, 21, 0.9), rgba(15, 15, 21, 0.4)), url(${channelArtwork})` 
-                  : `linear-gradient(135deg, ${ch.color || "#E11D48"} 0%, #0F0F15 100%)`,
-              }}
-            >
-              {/* Dark overlay for perfect text readability when artwork is displayed */}
-              {channelArtwork && (
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0F0F15]/80 via-transparent to-[#0F0F15]/40 z-0 pointer-events-none" />
-              )}
-              
-              <div className="z-10 text-white font-black tracking-tight flex flex-col">
-                <span className="text-xs uppercase opacity-80 tracking-widest font-bold">Channel</span>
-                <span className="text-3xl">{String(ch.channelNumber).padStart(2, "0")}</span>
-              </div>
-              <div className="z-10 text-right">
-                <div className="text-white font-extrabold text-xl group-hover:text-cinema-amber transition-colors drop-shadow-md">
-                  {ch.name}
-                </div>
-                <span className="text-[10px] text-white/80 bg-black/50 border border-white/10 px-2 py-0.5 rounded-full uppercase tracking-wider font-bold mt-1 inline-block backdrop-blur-xs">
-                  🔴 LIVE broadcast
-                </span>
-              </div>
-              {!channelArtwork && (
-                <div className="absolute -bottom-6 -right-6 text-white/5 font-bold text-8xl pointer-events-none uppercase italic tracking-tighter">
-                  CH{ch.channelNumber}
-                </div>
-              )}
-            </div>
-
-            {/* Now Playing Info */}
-            <div className="p-5 flex-1 flex flex-col justify-between">
-              <div className="space-y-2">
-                <span className="text-[10px] uppercase text-cinema-amber font-extrabold tracking-widest block">
-                  Now Playing
-                </span>
-                <h3 className="text-white font-bold text-sm leading-snug line-clamp-2" title={prog?.title || "Off Air"}>
-                  {prog?.title || "Broadcast Loop Initializing..."}
-                </h3>
-                {prog && (
-                  <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>
-                      {formatTimeSafe(prog.startedAt)} - {formatTimeSafe(prog.endsAt)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Live Program Progress Bar */}
-              {prog && (
-                <div className="mt-4 pt-4 border-t border-cinema-border/50">
-                  <div className="flex justify-between items-center text-[10px] text-gray-400 mb-1">
-                    <span>{Math.round(progressPercent)}% completed</span>
-                    <span className="font-semibold text-cinema-amber">{timeRemainingStr}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-cinema-amber transition-all duration-1000"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+      {channels.map((ch) => (
+        <ChannelCardItem key={ch.id} ch={ch} onSelectChannel={onSelectChannel} />
+      ))}
     </div>
   );
 }

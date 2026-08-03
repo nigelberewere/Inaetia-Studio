@@ -881,7 +881,7 @@ async function scanAllLibraries() {
       const relativePath = path.relative(item.baseDir, file);
       const filename = path.basename(file);
       const ext = path.extname(file);
-      const title = path.basename(file, ext).replace(/_/g, " ").replace(/-/g, " ");
+      const rawBase = path.basename(file, ext);
       
       const id = crypto.createHash("md5").update(file).digest("hex");
       musicIndex.set(id, file);
@@ -897,16 +897,37 @@ async function scanAllLibraries() {
         duration = await getDuration(file);
       }
 
-      // Derive Artist and Album from Directory Structure: /Artist/Album/File.mp3
-      const parts = relativePath.split(path.sep);
+      // Robust track-level & directory-level artist / title parsing
       let artist = "Unknown Artist";
+      let title = rawBase.replace(/_/g, " ").trim();
       let album = "Unknown Album";
 
+      // 1. Strip leading track numbers like "01. ", "01 - ", "1 - "
+      let cleanBase = title.replace(/^\d+[\s\.\-]+/, "").trim();
+
+      // 2. Check if filename contains track-level artist and title (e.g. "Central Cee - LET GO")
+      if (cleanBase.includes(" - ")) {
+        const titleParts = cleanBase.split(/\s+-\s+/);
+        if (titleParts.length >= 2) {
+          artist = titleParts[0].trim();
+          title = titleParts.slice(1).join(" - ").trim();
+        }
+      }
+
+      // 3. Fallback to directory structure if artist was not derived from filename
+      const parts = relativePath.split(path.sep);
+      if (artist === "Unknown Artist" || !artist) {
+        if (parts.length >= 3) {
+          artist = parts[parts.length - 3];
+        } else if (parts.length === 2) {
+          artist = parts[0];
+        }
+      }
+
+      // 4. Derive Album from Directory Structure
       if (parts.length >= 3) {
-        artist = parts[parts.length - 3];
         album = parts[parts.length - 2];
       } else if (parts.length === 2) {
-        artist = parts[0];
         album = "Single";
       }
 
@@ -2269,8 +2290,9 @@ app.get("/api/channels", async (req, res) => {
           startedAt: live.startedAt,
           endsAt: live.endsAt,
           offsetSeconds: live.offsetSeconds,
-          poster: live.currentProgram.poster,
-          fanart: live.currentProgram.fanart
+          poster: live.currentProgram.poster || `/api/artwork/${live.currentProgram.id}/poster`,
+          fanart: live.currentProgram.fanart || `/api/artwork/${live.currentProgram.id}/fanart`,
+          thumbnail: live.currentProgram.thumbnail || `/api/thumbnail/${live.currentProgram.id}`
         } : null
       };
     });

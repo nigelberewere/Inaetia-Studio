@@ -48,3 +48,57 @@ export function formatSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
+export function formatCleanDate(rawDate?: string | number | null): string | null {
+  if (!rawDate) return null;
+
+  if (typeof rawDate === "number") {
+    if (rawDate >= 1890 && rawDate <= 2100) return String(rawDate);
+    return null;
+  }
+
+  const str = String(rawDate).trim();
+  if (!str) return null;
+
+  // 4-digit year
+  if (/^\d{4}$/.test(str)) {
+    const yr = parseInt(str, 10);
+    if (yr >= 1890 && yr <= 2100) return str;
+    return null;
+  }
+
+  // Attempt standard date parse
+  const d = new Date(str);
+  if (isNaN(d.getTime())) {
+    // Try extracting 4 digit year regex if parsing failed
+    const match = str.match(/\b(19\d\d|20\d\d)\b/);
+    return match ? match[1] : null;
+  }
+
+  const year = d.getFullYear();
+  if (year < 1890 || year > 2100) return null;
+
+  try {
+    return d.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (_) {
+    return `${year}`;
+  }
+}
+
+export function normalizeSeriesName(name: string = ""): string {
+  if (!name) return "";
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s]/gi, "")
+    .replace(/\s+/g, " ");
+}
+
+export function pluralize(count: number, singular: string, plural?: string): string {
+  const p = plural || `${singular}s`;
+  return `${count} ${count === 1 ? singular : p}`;
+}
+

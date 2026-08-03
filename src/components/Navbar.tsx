@@ -57,76 +57,76 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-40 bg-cinema-bg/95 backdrop-blur-md border-b border-cinema-border px-4 md:px-8 py-3 flex items-center justify-between">
+    <nav className="sticky top-0 z-40 glass-nav px-4 md:px-8 py-3.5 flex items-center justify-between shadow-2xl transition-all duration-300">
       {/* Brand Logo */}
       <div 
-        className={`items-center gap-2 cursor-pointer select-none group ${isSearchFocused ? "hidden sm:flex" : "flex"}`}
+        className={`items-center gap-2.5 cursor-pointer select-none group ${isSearchFocused ? "hidden sm:flex" : "flex"}`}
         onClick={() => {
           clearSearch();
           setActiveView("home");
         }}
         id="nav-logo"
       >
-        <div className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-cinema-amber to-amber-600 flex items-center justify-center transition-all duration-300 group-hover:scale-105 shadow-lg shadow-cinema-amber/20 group-hover:shadow-cinema-amber/30">
+        <div className="relative w-9.5 h-9.5 rounded-xl bg-gradient-to-br from-cinema-amber via-amber-500 to-amber-700 flex items-center justify-center transition-all duration-300 group-hover:scale-105 shadow-lg shadow-cinema-amber/25 group-hover:shadow-cinema-amber/40">
           <svg className="w-5 h-5 text-cinema-bg" viewBox="0 0 24 24" fill="currentColor">
             {/* Elegant cinematic stylized vertical stroke 'I' & play button */}
             <rect x="5" y="5" width="2.5" height="14" rx="0.75" />
             <path d="M10 5l9 7-9 7V5z" />
           </svg>
         </div>
-        <span className="font-semibold text-lg tracking-wider hidden sm:inline-block">
+        <span className="font-bold text-lg tracking-wider hidden sm:inline-block text-white group-hover:text-cinema-amber transition-colors">
           Inaetia<span className="text-cinema-amber font-light"> Studios</span>
         </span>
       </div>
 
-      {/* Center Nav Links */}
-      <div className="hidden md:flex items-center gap-1 bg-cinema-card/50 p-1 rounded-full border border-cinema-border">
+      {/* Center Nav Links - Apple TV Segmented Glass Controller */}
+      <div className="hidden md:flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1.5 rounded-full border border-white/10 shadow-inner">
         <button
           id="btn-nav-movies"
           onClick={() => { clearSearch(); setActiveView("movies"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
             activeView === "movies"
-              ? "bg-cinema-amber text-cinema-bg shadow-md"
-              : "text-cinema-text hover:text-white hover:bg-white/5"
+              ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
           }`}
         >
-          <Film className="w-4 h-4" />
+          <Film className="w-3.5 h-3.5" />
           Movies
         </button>
         <button
           id="btn-nav-livetv"
           onClick={() => { clearSearch(); setActiveView("livetv"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
             activeView === "livetv"
-              ? "bg-cinema-amber text-cinema-bg shadow-md"
-              : "text-cinema-text hover:text-white hover:bg-white/5"
+              ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
           }`}
         >
-          <TvIcon className="w-4 h-4" />
+          <TvIcon className="w-3.5 h-3.5" />
           Live TV
         </button>
         <button
           id="btn-nav-radio"
           onClick={() => { clearSearch(); setActiveView("radio"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
             activeView === "radio" || activeView === "radioguide"
-              ? "bg-cinema-amber text-cinema-bg shadow-md"
-              : "text-cinema-text hover:text-white hover:bg-white/5"
+              ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
           }`}
         >
-          <RadioIcon className="w-4 h-4" />
+          <RadioIcon className="w-3.5 h-3.5" />
           Radio
         </button>
         <button
           id="btn-nav-music"
           onClick={() => { clearSearch(); setActiveView("music"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-medium transition-all ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
             activeView === "music"
-              ? "bg-cinema-amber text-cinema-bg shadow-md"
-              : "text-cinema-text hover:text-white hover:bg-white/5"
+              ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
           }`}
         >
-          <MusicIcon className="w-4 h-4" />
+          <MusicIcon className="w-3.5 h-3.5" />
           Music
         </button>
       </div>

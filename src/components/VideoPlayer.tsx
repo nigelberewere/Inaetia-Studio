@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
-import { safeFetch } from "../utils";
+import { safeFetch, normalizeSeriesName } from "../utils";
 import { 
   Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, 
   RotateCcw, RotateCw, X, Loader2, FastForward, AlertCircle, Clock,
@@ -17,8 +17,9 @@ function getNextEpisode(currentVideo: Movie, allMovies: Movie[]): Movie | null {
   if (currentVideo.type !== "episode" || !currentVideo.showName) return null;
 
   // Filter all episodes of the same show
+  const currentKey = normalizeSeriesName(currentVideo.showName);
   const showEpisodes = allMovies.filter(
-    (m) => m.type === "episode" && m.showName === currentVideo.showName
+    (m) => m.type === "episode" && m.showName && normalizeSeriesName(m.showName) === currentKey
   );
 
   const parseSeasonNumber = (sName: string = "") => {
