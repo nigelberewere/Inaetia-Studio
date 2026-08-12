@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
-import { safeFetch } from "../utils";
+import { safeFetch, cleanArtistName, cleanTrackTitle } from "../utils";
 import { RadioStation, RadioEPGItem } from "../types";
 import { 
   Radio as RadioIcon, ArrowLeft, RefreshCw, Clock, 
@@ -222,11 +222,11 @@ export default function RadioGuide() {
 
                               {/* Track info */}
                               <div>
-                                <h4 className="text-sm font-bold text-white truncate leading-snug" title={item.track.title}>
-                                  {item.track.title}
+                                <h4 className="text-sm font-bold text-white truncate leading-snug" title={cleanTrackTitle(item.track.title)}>
+                                  {cleanTrackTitle(item.track.title)}
                                 </h4>
-                                <p className="text-xs text-cinema-muted truncate mt-0.5 leading-normal" title={item.track.artist}>
-                                  {item.track.artist || "Unknown Artist"}
+                                <p className="text-xs text-cinema-muted truncate mt-0.5 leading-normal" title={cleanArtistName(item.track.artist)}>
+                                  {cleanArtistName(item.track.artist)}
                                 </p>
                               </div>
                             </div>

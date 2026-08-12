@@ -5,7 +5,7 @@ import {
   Play, Clock, HardDrive, Calendar, Star, Tag, X, Award, Youtube, 
   ChevronDown, ChevronUp, Cpu, FileText, Subtitles, Volume2, Film 
 } from "lucide-react";
-import { formatDuration, formatSize, formatCleanDate, formatRating } from "../utils";
+import { formatDuration, formatSize, formatCleanDate, formatRating, sanitizeTitle } from "../utils";
 import { Badge } from "./common/Badge";
 
 interface MovieDetailModalProps {
@@ -16,6 +16,7 @@ interface MovieDetailModalProps {
 export default function MovieDetailModal({ movie, onClose }: MovieDetailModalProps) {
   const { movies, setCurrentVideo, continueWatching } = useApp();
   const [showTechDetails, setShowTechDetails] = useState(false);
+  const [showAdvancedPath, setShowAdvancedPath] = useState(false);
 
   // Calculate progress
   const watchRecord = continueWatching.find((item) => item.movieId === movie.id);
@@ -74,7 +75,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
 
             {/* Title: Must wrap up to 2 lines, never truncate to 1 line! */}
             <h2 className="text-2xl sm:text-4xl md:text-5xl font-extrabold text-white drop-shadow-xl leading-tight line-clamp-2">
-              {movie.title}
+              {sanitizeTitle(movie.title, movie.filename)}
             </h2>
 
             {movie.originalTitle && movie.originalTitle !== movie.title && (
@@ -92,12 +93,24 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
             {/* Left Column: Poster Image */}
             <div className="hidden md:block md:col-span-4 lg:col-span-3">
               <div className="aspect-[2/3] rounded-2xl overflow-hidden border border-white/15 shadow-2xl bg-black/50 relative group">
-                <img 
-                  src={movie.poster || `/api/artwork/${movie.id}/poster`} 
-                  alt={movie.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
+                {movie.hasPoster && movie.poster ? (
+                  <img 
+                    src={movie.poster} 
+                    alt={sanitizeTitle(movie.title, movie.filename)}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-cinema-card via-[#1c182d] to-black flex flex-col items-center justify-center p-4 text-center">
+                    <Film className="w-10 h-10 text-cinema-amber mb-2" />
+                    <span className="text-xs font-bold text-white leading-snug px-2 line-clamp-3">
+                      {sanitizeTitle(movie.title, movie.filename)}
+                    </span>
+                    {movie.year && (
+                      <span className="text-[10px] text-cinema-muted mt-1 font-semibold">{movie.year}</span>
+                    )}
+                  </div>
+                )}
                 <span className="absolute top-3 right-3 px-2 py-0.5 bg-black/75 backdrop-blur-md rounded-md border border-white/10 text-[10px] font-bold uppercase tracking-wider text-white">
                   {movie.extension.replace(".", "")}
                 </span>
@@ -190,7 +203,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                   className="flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl bg-cinema-amber hover:bg-cinema-amber-hover text-cinema-bg transition-all cursor-pointer text-sm font-bold shadow-xl shadow-cinema-amber/25 appletv-btn"
                 >
                   <Play className="w-5 h-5 fill-cinema-bg" />
-                  {progress !== undefined ? "Resume Playing" : "Play Feature"}
+                  {progress !== undefined ? "Resume Playing" : "Play Now"}
                 </button>
 
                 {movie.trailer && (
@@ -218,17 +231,40 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
 
               {/* Collapsible Power User Technical Specs Drawer */}
               {showTechDetails && (
-                <div className="p-4 rounded-2xl bg-black/60 border border-white/10 text-xs font-mono space-y-2 animate-fade-in text-cinema-text/90">
+                <div className="p-4 rounded-2xl bg-black/60 border border-white/10 text-xs space-y-2.5 animate-fade-in text-cinema-text/90">
                   <div className="flex items-center gap-2 text-cinema-amber font-bold pb-1 border-b border-white/10">
                     <FileText className="w-4 h-4" /> Technical Container Details
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div><span className="text-cinema-muted">File ID:</span> <span className="text-white">{movie.id}</span></div>
-                    <div><span className="text-cinema-muted">Format Extension:</span> <span className="text-white">{movie.extension}</span></div>
-                    <div><span className="text-cinema-muted">Subtitles Available:</span> <span className="text-white">{movie.hasSubtitles ? "Yes" : "No"}</span></div>
-                    <div><span className="text-cinema-muted">Metadata Source:</span> <span className="text-white uppercase">{movie.metadataSource || "Standard"}</span></div>
-                    <div className="sm:col-span-2"><span className="text-cinema-muted">Server Path:</span> <span className="text-white truncate block">{movie.filepath}</span></div>
+                    <div><span className="text-cinema-muted">Format Extension:</span> <span className="text-white font-medium uppercase">{movie.extension ? movie.extension.replace(".", "") : "MKV"}</span></div>
+                    <div><span className="text-cinema-muted">Media Category:</span> <span className="text-white font-medium">{movie.category || (movie.type === "movie" ? "Feature Film" : "Video")}</span></div>
+                    <div><span className="text-cinema-muted">File Size:</span> <span className="text-white font-medium">{formatSize(movie.size)}</span></div>
+                    <div><span className="text-cinema-muted">Subtitles Available:</span> <span className="text-white font-medium">{movie.hasSubtitles ? "Yes (.srt/.vtt)" : "None"}</span></div>
+                    <div><span className="text-cinema-muted">Metadata Engine:</span> <span className="text-white font-medium uppercase">{movie.metadataSource || "TMM NFO Parser"}</span></div>
                   </div>
+
+                  {/* Advanced Debug Info (Gated) */}
+                  {showAdvancedPath ? (
+                    <div className="pt-2 border-t border-white/10 space-y-1 font-mono text-[10px] animate-fade-in">
+                      <div><span className="text-cinema-muted">Internal File ID:</span> <span className="text-white select-all">{movie.id}</span></div>
+                      <div><span className="text-cinema-muted">Server Path:</span> <span className="text-white break-all">{movie.filepath}</span></div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdvancedPath(false)}
+                        className="text-[10px] text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
+                      >
+                        Hide Debug Path & ID
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvancedPath(true)}
+                      className="text-[10px] text-cinema-muted hover:text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
+                    >
+                      Show Advanced Debug Path & Internal ID
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -241,28 +277,40 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                 <Film className="w-4 h-4 text-cinema-amber" /> More Like This
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {relatedMovies.map((item) => (
-                  <div 
-                    key={item.id}
-                    onClick={() => {
-                      // Switch active movie in modal
-                      onClose();
-                      setTimeout(() => setCurrentVideo(item), 100);
-                    }}
-                    className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-black/40 border border-white/10 cursor-pointer hover:border-cinema-amber transition-all hover:scale-105 shadow-md"
-                  >
-                    <img 
-                      src={item.poster || item.thumbnail || `/api/artwork/${item.id}/poster`}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-2.5 flex flex-col justify-end">
-                      <span className="text-xs font-bold text-white line-clamp-2 leading-tight group-hover:text-cinema-amber transition-colors">
-                        {item.title}
-                      </span>
+                {relatedMovies.map((item) => {
+                  const itemTitle = sanitizeTitle(item.title, item.filename);
+                  return (
+                    <div 
+                      key={item.id}
+                      onClick={() => {
+                        // Switch active movie in modal
+                        onClose();
+                        setTimeout(() => setCurrentVideo(item), 100);
+                      }}
+                      className="group relative aspect-[2/3] rounded-xl overflow-hidden bg-black/40 border border-white/10 cursor-pointer hover:border-cinema-amber transition-all hover:scale-105 shadow-md"
+                    >
+                      {item.hasPoster && item.poster ? (
+                        <img 
+                          src={item.poster}
+                          alt={itemTitle}
+                          className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-cinema-card via-[#1a1728] to-black flex flex-col items-center justify-center p-2 text-center">
+                          <Film className="w-6 h-6 text-cinema-amber/80 mb-1" />
+                          <span className="text-[11px] font-extrabold text-white/90 line-clamp-3 leading-tight">
+                            {itemTitle}
+                          </span>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent p-2.5 flex flex-col justify-end">
+                        <span className="text-xs font-bold text-white line-clamp-2 leading-tight group-hover:text-cinema-amber transition-colors">
+                          {itemTitle}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

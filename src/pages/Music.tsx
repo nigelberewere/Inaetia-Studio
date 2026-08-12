@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Track } from "../types";
 import { Music as MusicIcon, Disc, Play, ChevronRight, User, FolderHeart, Clock } from "lucide-react";
+import { cleanArtistName, cleanTrackTitle } from "../utils";
 
 export default function Music() {
   const { music, loading, playTrack, currentTrack, isPlayingAudio } = useApp();
@@ -13,7 +14,7 @@ export default function Music() {
     const groups: Record<string, Record<string, Track[]>> = {};
 
     music.forEach((track) => {
-      const artist = track.artist || "Unknown Artist";
+      const artist = cleanArtistName(track.artist);
       const album = track.album || "Single";
 
       if (!groups[artist]) {
@@ -221,7 +222,7 @@ export default function Music() {
 
                           <div className="min-w-0">
                             <p className={`font-semibold truncate text-sm ${isCurrent ? "text-cinema-amber" : "text-white"}`}>
-                              {track.title}
+                              {cleanTrackTitle(track.title)}
                             </p>
                             <p className="text-cinema-muted text-[10px] truncate">
                               {track.filename}

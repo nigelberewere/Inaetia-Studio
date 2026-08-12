@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
-import { Play, Clock, HardDrive, Star } from "lucide-react";
-import { formatDuration, formatSize } from "../utils";
+import { Play, Clock, HardDrive, Star, Film, Tv } from "lucide-react";
+import { formatDuration, formatSize, sanitizeTitle } from "../utils";
 
 interface MovieCardProps {
   movie: Movie;
@@ -14,6 +14,7 @@ interface MovieCardProps {
 
 export default function MovieCard({ movie, progress, onClick, aspect }: MovieCardProps) {
   const { setCurrentVideo } = useApp();
+  const [imageError, setImageError] = useState(false);
 
   const handleCardClick = () => {
     if (onClick) {
@@ -23,12 +24,16 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
     }
   };
 
+  const displayTitle = sanitizeTitle(movie.title, movie.filename);
+
   // Default to portrait for movies, and landscape for episodes or simple clips
   const cardAspect = aspect || (movie.type === "movie" || movie.hasPoster ? "portrait" : "landscape");
   
   const isPortrait = cardAspect === "portrait";
+  const hasRealPoster = isPortrait ? (movie.hasPoster && movie.poster && !imageError) : (!imageError);
+  
   const imageSrc = isPortrait 
-    ? (movie.poster || `/api/artwork/${movie.id}/poster`) 
+    ? (movie.hasPoster ? movie.poster : null)
     : (movie.thumb || movie.thumbnail || `/api/artwork/${movie.id}/thumb`);
 
   return (
@@ -47,13 +52,35 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
     >
       {/* Thumbnail/Poster Container */}
       <div className={`relative ${isPortrait ? "aspect-[2/3]" : "aspect-[16/9]"} w-full overflow-hidden bg-black/50`}>
-        <img
-          src={imageSrc}
-          alt={movie.title}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+        {hasRealPoster && imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={displayTitle}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          /* Designed Branded Gradient Placeholder Fallback */
+          <div className="w-full h-full bg-gradient-to-br from-cinema-card via-[#1a1728] to-black flex flex-col items-center justify-center p-3 text-center border border-white/5 group-hover:from-cinema-card/90 group-hover:to-amber-950/30 transition-all">
+            <div className="w-11 h-11 rounded-2xl bg-cinema-amber/10 border border-cinema-amber/20 flex items-center justify-center mb-2 group-hover:scale-110 group-hover:border-cinema-amber/40 transition-all">
+              {movie.type === "episode" ? (
+                <Tv className="w-5 h-5 text-cinema-amber" />
+              ) : (
+                <Film className="w-5 h-5 text-cinema-amber" />
+              )}
+            </div>
+            <span className="text-xs font-extrabold text-white/90 line-clamp-3 leading-tight px-1 group-hover:text-cinema-amber transition-colors">
+              {displayTitle}
+            </span>
+            {movie.year && (
+              <span className="text-[10px] font-bold text-cinema-muted mt-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
+                {movie.year}
+              </span>
+            )}
+          </div>
+        )}
         
         {/* Play overlay on hover */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
@@ -68,7 +95,7 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
         </span>
 
         {/* Rating/Year overlay on poster bottom */}
-        {isPortrait && (movie.rating || movie.year) && (
+        {isPortrait && hasRealPoster && (movie.rating || movie.year) && (
           <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 bg-black/75 backdrop-blur-md rounded-md border border-white/10 text-[10px] font-bold text-white">
             {movie.rating && (
               <span className="flex items-center gap-0.5 text-cinema-amber">
@@ -85,7 +112,7 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
       {/* Meta Content */}
       <div className="p-3 md:p-3.5 flex flex-col flex-1 gap-1.5">
         <h3 className="font-semibold text-sm md:text-base text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
-          {movie.title}
+          {displayTitle}
         </h3>
         
         {/* Row of badges */}

@@ -34,6 +34,7 @@ app.use((req, res, next) => {
 import os from "os";
 import { findNfoFile, parseNfo, findArtwork, parseTvShowNfo, parseSeasonEpisode, cleanFilenameTitle } from "./src/nfoReader";
 import { generateRecommendationsForProfile, recomputeTasteProfile } from "./src/recommendationEngine";
+import { sanitizeTitle, cleanArtistName, cleanTrackTitle } from "./src/utils";
 import {
   HLS_CACHE_ROOT,
   probeMediaFile,
@@ -909,38 +910,51 @@ async function scanAllLibraries() {
       }
 
       // Robust track-level & directory-level artist / title parsing
+      let rawTitle = rawBase.replace(/_/g, " ").trim();
+      let cleanTitle = cleanTrackTitle(rawTitle);
+
       let artist = "Unknown Artist";
-      let title = rawBase.replace(/_/g, " ").trim();
+      let title = cleanTitle;
       let album = "Unknown Album";
 
-      // 1. Strip leading track numbers like "01. ", "01 - ", "1 - "
-      let cleanBase = title.replace(/^\d+[\s\.\-]+/, "").trim();
-
-      // 2. Check if filename contains track-level artist and title (e.g. "Central Cee - LET GO")
-      if (cleanBase.includes(" - ")) {
-        const titleParts = cleanBase.split(/\s+-\s+/);
+      // 1. Check if cleanTitle contains track-level artist and title (e.g. "Central Cee - LET GO")
+      if (cleanTitle.includes(" - ")) {
+        const titleParts = cleanTitle.split(/\s+-\s+/);
         if (titleParts.length >= 2) {
-          artist = titleParts[0].trim();
-          title = titleParts.slice(1).join(" - ").trim();
+          artist = cleanArtistName(titleParts[0]);
+          title = cleanTrackTitle(titleParts.slice(1).join(" - "));
         }
       }
 
-      // 3. Fallback to directory structure if artist was not derived from filename
+      // 2. Fallback to directory structure if artist was not derived from filename
       const parts = relativePath.split(path.sep);
       if (artist === "Unknown Artist" || !artist) {
         if (parts.length >= 3) {
-          artist = parts[parts.length - 3];
+          artist = cleanArtistName(parts[parts.length - 3]);
+          album = parts[parts.length - 2];
         } else if (parts.length === 2) {
-          artist = parts[0];
+          artist = cleanArtistName(parts[0]);
+          if (parts[0].includes(" - ")) {
+            const folderParts = parts[0].split(/\s+-\s+/);
+            album = folderParts.slice(1).join(" - ").replace(/[\(\[]\s*(18\d\d|19\d\d|20\d\d)\s*[\)\]]/g, "").trim();
+          } else {
+            album = "Single";
+          }
         }
       }
 
-      // 4. Derive Album from Directory Structure
-      if (parts.length >= 3) {
-        album = parts[parts.length - 2];
-      } else if (parts.length === 2) {
-        album = "Single";
+      // 3. Derive Album if not set
+      if (album === "Unknown Album") {
+        if (parts.length >= 3) {
+          album = parts[parts.length - 2];
+        } else if (parts.length === 2) {
+          album = parts[0].includes(" - ") ? parts[0].split(/\s+-\s+/).slice(1).join(" - ").trim() : "Single";
+        }
       }
+
+      // Final strict cleaning
+      artist = cleanArtistName(artist);
+      title = cleanTrackTitle(title);
 
       const addedDate = (stat.birthtime && stat.birthtime instanceof Date && !isNaN(stat.birthtime.getTime()) && stat.birthtime.getTime() > 0)
         ? stat.birthtime
@@ -1645,8 +1659,8 @@ app.get("/api/artwork/:id/:type", (req, res) => {
 
   if (type === "poster") {
     if (streamImageIfExists(artwork.poster)) return;
-    if (streamImageIfExists(artwork.thumb)) return;
-    return res.redirect(`/api/thumbnail/${id}`);
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
   }
 
   if (type === "fanart") {
@@ -2675,13 +2689,13 @@ function getLiveRadioTrackAt(stationId: string, timestamp: number) {
   return {
     station: {
       ...station,
-      nowPlayingArtist: currentTrack.artist,
-      nowPlayingTitle: currentTrack.title,
+      nowPlayingArtist: cleanArtistName(currentTrack.artist),
+      nowPlayingTitle: cleanTrackTitle(currentTrack.title),
     },
     currentTrack: {
       id: currentTrack.id,
-      title: currentTrack.title,
-      artist: currentTrack.artist,
+      title: cleanTrackTitle(currentTrack.title),
+      artist: cleanArtistName(currentTrack.artist),
       album: currentTrack.album,
       duration: currentTrack.duration,
       filepath: currentTrack.filepath,
@@ -2690,8 +2704,8 @@ function getLiveRadioTrackAt(stationId: string, timestamp: number) {
     startedAt,
     endsAt,
     nextTrack: nextTrack ? {
-      title: nextTrack.title,
-      artist: nextTrack.artist,
+      title: cleanTrackTitle(nextTrack.title),
+      artist: cleanArtistName(nextTrack.artist),
       startsAt: endsAt
     } : null,
     progress

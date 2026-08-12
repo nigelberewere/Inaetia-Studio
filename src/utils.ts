@@ -33,9 +33,13 @@ export function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise
 }
 
 export function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
+  if (seconds === undefined || seconds === null || isNaN(seconds) || !isFinite(seconds) || seconds <= 0) {
+    return "--:--";
+  }
+  const sec = Math.floor(seconds);
+  if (sec < 60) return `${sec}s`;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
@@ -138,4 +142,107 @@ export function formatRating(rawRating?: string | null): string | null {
   // Return the first clean rating value
   return cleanTokens[0];
 }
+
+export function sanitizeTitle(rawTitle?: string | null, filename?: string | null): string {
+  if (!rawTitle && !filename) return "Untitled";
+
+  let str = (rawTitle || filename || "").trim();
+
+  // Strip file extension if present (e.g. .mkv, .mp4, .avi, etc.)
+  str = str.replace(/\.(mkv|mp4|avi|mov|m4v|webm|ts|flv|wmv|mpg|mpeg)$/i, "");
+
+  // 1. Remove year in parentheses or brackets e.g. (2008), [2023]
+  str = str.replace(/[\(\[]\s*(18\d\d|19\d\d|20\d\d)\s*[\)\]]/g, "");
+
+  // 2. Remove scene group tags in brackets e.g. [YTS.MX], [Etrg], [Rarbg]
+  str = str.replace(/\[[^\]]+\]/g, "");
+
+  // 3. Trailing hyphenated release group e.g. -ETRG, -YIFY, -LOL, -SPARKS, -mSD, -MeGusta, -FLUX
+  str = str.replace(/-\s*[A-Za-z0-9]+$/i, "");
+
+  // 4. Common quality / source / codec / release group tag patterns (case-insensitive)
+  const qualityCodecTags = [
+    /480p/gi, /576p/gi, /720p/gi, /1080p/gi, /2160p/gi, /4k/gi, /uhd/gi,
+    /dvdrip/gi, /dvd-rip/gi, /brrip/gi, /bdrip/gi, /bluray/gi, /blu-ray/gi,
+    /webrip/gi, /web-rip/gi, /webdl/gi, /web-dl/gi, /hdtv/gi, /hdrip/gi,
+    /xvid/gi, /divx/gi, /x264/gi, /x265/gi, /h264/gi, /h265/gi, /hevc/gi,
+    /aac/gi, /ac3/gi, /dts/gi, /dd5\.1/gi, /eztv/gi, /rarbg/gi, /yts/gi, /yify/gi, /etrg/gi
+  ];
+
+  qualityCodecTags.forEach((tag) => {
+    str = str.replace(tag, " ");
+  });
+
+  // 5. Replace dots, underscores, hyphens (when separating words) with spaces
+  str = str.replace(/[._\-]+/g, " ");
+
+  // 6. Collapse extra whitespace
+  str = str.replace(/\s+/g, " ").trim();
+
+  if (!str) {
+    return rawTitle || filename || "Untitled";
+  }
+
+  // 7. Title-case the result
+  return str
+    .split(" ")
+    .map((word) => {
+      if (!word) return "";
+      // Keep Roman numerals or short acronyms capitalized
+      if (/^(3d|hd|tv|i|ii|iii|iv|v|vi|vii|viii|ix|x)$/i.test(word)) {
+        return word.toUpperCase();
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function cleanArtistName(rawArtist?: string | null): string {
+  if (!rawArtist) return "Unknown Artist";
+  let str = rawArtist.trim();
+  if (!str || str.toLowerCase() === "unknown" || str.toLowerCase() === "unknown artist") {
+    return "Unknown Artist";
+  }
+
+  // 1. If artist string contains " - " (e.g. "Drake - For All The Dogs (2023)"), take the artist part
+  if (str.includes(" - ")) {
+    const parts = str.split(/\s+-\s+/);
+    if (parts.length >= 2) {
+      str = parts[0].trim();
+    }
+  }
+
+  // 2. Remove year in parens or brackets e.g. (2023), [2023]
+  str = str.replace(/[\(\[]\s*(18\d\d|19\d\d|20\d\d)\s*[\)\]]/g, "");
+
+  // 3. Remove trailing album or folder tags in parens if attached
+  str = str.replace(/\s*[\(\[].*?[\)\]]/g, "");
+
+  // 4. Strip leading track numbers if present in artist
+  str = str.replace(/^\d+[\.\s\-]+/, "");
+
+  // 5. Replace underscores with spaces & collapse whitespace
+  str = str.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
+  return str || "Unknown Artist";
+}
+
+export function cleanTrackTitle(rawTitle?: string | null): string {
+  if (!rawTitle) return "Unknown Track";
+  let str = rawTitle.trim();
+
+  // Strip file extension if present
+  str = str.replace(/\.(mp3|flac|m4a|wav|ogg|aac)$/i, "");
+
+  // Strip leading track numbers: e.g. "10. Home", "22. Away From Home", "01 - Title", "01. "
+  str = str.replace(/^\d{1,3}\s*[\.\-]\s*/, "");
+  str = str.replace(/^\d{1,3}\s+/, "");
+
+  // Replace underscores with spaces & collapse whitespace
+  str = str.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
+  return str || "Unknown Track";
+}
+
 

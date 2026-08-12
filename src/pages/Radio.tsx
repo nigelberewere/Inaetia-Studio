@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useApp } from "../context/AppContext";
-import { safeFetch } from "../utils";
+import { safeFetch, cleanArtistName, cleanTrackTitle } from "../utils";
 import { RadioStation, RadioNowPlaying } from "../types";
 import { 
   Radio as RadioIcon, Play, Pause, RefreshCw, Zap, 
@@ -253,11 +253,11 @@ export default function Radio() {
                               <span className="w-1.5 h-1.5 rounded-full bg-cinema-amber animate-pulse" />
                               Now Playing
                             </div>
-                            <div className="text-sm font-bold text-white truncate leading-snug" title={currentTrack.title}>
-                              {currentTrack.title}
+                            <div className="text-sm font-bold text-white truncate leading-snug" title={cleanTrackTitle(currentTrack.title)}>
+                              {cleanTrackTitle(currentTrack.title)}
                             </div>
-                            <div className="text-xs font-semibold text-cinema-muted truncate leading-normal" title={currentTrack.artist}>
-                              {currentTrack.artist || "Unknown Artist"}
+                            <div className="text-xs font-semibold text-cinema-muted truncate leading-normal" title={cleanArtistName(currentTrack.artist)}>
+                              {cleanArtistName(currentTrack.artist)}
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-cinema-muted pt-1">
                               <Clock className="w-3 h-3 shrink-0 text-cinema-amber/80" />
@@ -370,11 +370,11 @@ export default function Radio() {
                         <div className="bg-black/40 rounded-lg p-2.5 border border-zinc-900 text-xs space-y-0.5">
                           {currentTrack ? (
                             <>
-                              <div className="font-semibold text-zinc-200 truncate" title={currentTrack.title}>
-                                {currentTrack.title}
+                              <div className="font-semibold text-zinc-200 truncate" title={cleanTrackTitle(currentTrack.title)}>
+                                {cleanTrackTitle(currentTrack.title)}
                               </div>
-                              <div className="text-[11px] text-zinc-400 truncate" title={currentTrack.artist}>
-                                {currentTrack.artist || "Unknown Artist"}
+                              <div className="text-[11px] text-zinc-400 truncate" title={cleanArtistName(currentTrack.artist)}>
+                                {cleanArtistName(currentTrack.artist)}
                               </div>
                             </>
                           ) : (

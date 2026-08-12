@@ -2,6 +2,7 @@ import React from "react";
 import { useApp } from "../context/AppContext";
 import { Film, Music, Play, Clock } from "lucide-react";
 import MovieCard from "./MovieCard";
+import { sanitizeTitle, cleanArtistName, cleanTrackTitle } from "../utils";
 
 export default function SearchResults() {
   const { searchQuery, searchResults, isSearching, playTrack, music } = useApp();
@@ -80,7 +81,7 @@ export default function SearchResults() {
               <div key={movie.id} className="relative">
                 <MovieCard movie={movie} />
                 <div className="absolute top-2 left-2 pointer-events-none bg-black/80 px-2 py-0.5 rounded text-[10px] font-bold border border-white/10 max-w-[150px] truncate">
-                  {highlightText(movie.title, searchQuery)}
+                  {highlightText(sanitizeTitle(movie.title, movie.filename), searchQuery)}
                 </div>
               </div>
             ))}
@@ -122,10 +123,10 @@ export default function SearchResults() {
                         </button>
                       </td>
                       <td className="py-3 px-4 font-semibold text-white">
-                        {highlightText(track.title, searchQuery)}
+                        {highlightText(cleanTrackTitle(track.title), searchQuery)}
                       </td>
                       <td className="py-3 px-4 text-cinema-muted">
-                        {highlightText(track.artist, searchQuery)}
+                        {highlightText(cleanArtistName(track.artist), searchQuery)}
                       </td>
                       <td className="py-3 px-4 text-cinema-muted">
                         {highlightText(track.album, searchQuery)}

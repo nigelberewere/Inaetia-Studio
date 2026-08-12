@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { XMLParser } from "fast-xml-parser";
+import { sanitizeTitle } from "./utils";
 
 export interface MovieMetadata {
   title: string;
@@ -494,33 +495,6 @@ export function findArtwork(videoFilePath: string): ArtworkPaths {
 }
 
 export function cleanFilenameTitle(filename: string, ext: string): string {
-  let title = path.basename(filename, ext);
-  
-  // 1. Remove year in parentheses e.g. (2008)
-  title = title.replace(/\(\d{4}\)/g, "");
-  // 2. Remove brackets e.g. [YTS.MX]
-  title = title.replace(/\[[^\]]+\]/g, "");
-  // 3. Remove common quality/codec/group tags (case insensitive)
-  const tags = [
-    /\b1080p\b/i, /\b720p\b/i, /\b2160p\b/i, /\b4k\b/i,
-    /\bwebrip\b/i, /\bbluray\b/i, /\bweb-dl\b/i, /\bhdrip\b/i,
-    /\bx264\b/i, /\bx265\b/i, /\bhevc\b/i, /\baac\b/i, /\bh264\b/i, /\bh265\b/i,
-    /\bshvc\b/i, /\bdts\b/i, /\beztvx?\.to\b/i, /\byts\b/i
-  ];
-  tags.forEach(tag => {
-    title = title.replace(tag, "");
-  });
-
-  // 4. Replace dots and underscores with spaces
-  title = title.replace(/[._\-]+/g, " ");
-
-  // 5. Trim extra spaces
-  title = title.replace(/\s+/g, " ").trim();
-
-  // 6. Title-case helper
-  title = title.split(" ")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-
-  return title || path.basename(filename, ext);
+  const base = path.basename(filename, ext);
+  return sanitizeTitle(base, filename);
 }

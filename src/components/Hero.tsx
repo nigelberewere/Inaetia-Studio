@@ -3,7 +3,7 @@ import { Movie, HeroRecommendation } from "../types";
 import { useApp } from "../context/AppContext";
 import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight, Star, ShieldAlert, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { formatDuration, formatSize, formatCleanDate, formatRating } from "../utils";
+import { formatDuration, formatSize, formatCleanDate, formatRating, sanitizeTitle } from "../utils";
 import { Badge } from "./common/Badge";
 
 interface HeroProps {
@@ -15,6 +15,7 @@ interface HeroProps {
 export default function Hero({ movies = [], movie, recommendations = [] }: HeroProps) {
   const { setCurrentVideo } = useApp();
   const [showInfo, setShowInfo] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -157,7 +158,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
 
             {/* Title */}
             <h1 className="text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white drop-shadow-lg leading-tight">
-              {activeMovie.title}
+              {sanitizeTitle(activeMovie.title, activeMovie.filename)}
             </h1>
 
             {/* Genres Tag Chips */}
@@ -232,19 +233,43 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
 
             {/* Collapsible Technical Details */}
             {showInfo && (
-              <div className="p-4 bg-black/80 backdrop-blur-xl border border-white/15 rounded-xl mt-3 animate-fade-in text-xs text-cinema-text space-y-2">
-                <p className="font-bold text-cinema-amber uppercase tracking-wider text-[11px]">Media File Diagnostics:</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 font-mono text-[11px]">
-                  <div><span className="text-cinema-muted">ID:</span> <span className="text-white">{activeMovie.id}</span></div>
-                  <div><span className="text-cinema-muted">Format:</span> <span className="text-white">{activeMovie.extension}</span></div>
-                  <div className="md:col-span-2"><span className="text-cinema-muted">Filename:</span> <span className="text-white truncate block">{activeMovie.filename}</span></div>
+              <div className="p-4 bg-black/80 backdrop-blur-xl border border-white/15 rounded-xl mt-3 animate-fade-in text-xs text-cinema-text space-y-2.5">
+                <p className="font-bold text-cinema-amber uppercase tracking-wider text-[11px]">Media Technical Details:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  <div><span className="text-cinema-muted">Format:</span> <span className="text-white font-medium uppercase">{activeMovie.extension ? activeMovie.extension.replace(".", "") : "MKV"}</span></div>
+                  <div><span className="text-cinema-muted">Category:</span> <span className="text-white font-medium">{activeMovie.category || (activeMovie.type === "movie" ? "Feature Film" : "Video")}</span></div>
+                  <div><span className="text-cinema-muted">File Size:</span> <span className="text-white font-medium">{formatSize(activeMovie.size)}</span></div>
+                  <div><span className="text-cinema-muted">Subtitles:</span> <span className="text-white font-medium">{activeMovie.hasSubtitles ? "Available (.srt/.vtt)" : "None"}</span></div>
                   {activeMovie.director && (
-                    <div><span className="text-cinema-muted">Director:</span> <span className="text-white">{activeMovie.director}</span></div>
+                    <div><span className="text-cinema-muted">Director:</span> <span className="text-white font-medium">{activeMovie.director}</span></div>
                   )}
                   {activeMovie.studio && (
-                    <div><span className="text-cinema-muted">Studio:</span> <span className="text-white">{activeMovie.studio}</span></div>
+                    <div><span className="text-cinema-muted">Studio:</span> <span className="text-white font-medium">{activeMovie.studio}</span></div>
                   )}
                 </div>
+
+                {/* Advanced Diagnostics (Gated) */}
+                {showAdvanced ? (
+                  <div className="pt-2 border-t border-white/10 space-y-1 font-mono text-[10px] animate-fade-in">
+                    <div><span className="text-cinema-muted">File ID:</span> <span className="text-white select-all">{activeMovie.id}</span></div>
+                    <div><span className="text-cinema-muted">Server Path:</span> <span className="text-white break-all">{activeMovie.filepath}</span></div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAdvanced(false)}
+                      className="text-[10px] text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
+                    >
+                      Hide Advanced Identifiers
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(true)}
+                    className="text-[10px] text-cinema-muted hover:text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
+                  >
+                    Show Advanced Identifiers & Server Path
+                  </button>
+                )}
               </div>
             )}
           </div>

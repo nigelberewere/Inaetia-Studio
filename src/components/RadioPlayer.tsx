@@ -4,6 +4,7 @@ import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, 
   Radio as RadioIcon, Calendar, X, Disc
 } from "lucide-react";
+import { cleanArtistName, cleanTrackTitle } from "../utils";
 
 export default function RadioPlayer() {
   const {
@@ -114,8 +115,8 @@ export default function RadioPlayer() {
             {activeStation.name}
           </span>
           {radioTrack ? (
-            <span className="text-xs text-cinema-text truncate block mt-0.5" title={`${radioTrack.title} - ${radioTrack.artist}`}>
-              {radioTrack.title} • {radioTrack.artist || "Unknown"}
+            <span className="text-xs text-cinema-text truncate block mt-0.5" title={`${cleanTrackTitle(radioTrack.title)} - ${cleanArtistName(radioTrack.artist)}`}>
+              {cleanTrackTitle(radioTrack.title)} • {cleanArtistName(radioTrack.artist)}
             </span>
           ) : (
             <span className="text-xs text-cinema-muted italic block mt-0.5">

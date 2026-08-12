@@ -534,7 +534,7 @@ export default function Settings() {
           <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-3 mt-4 text-[11px] font-mono space-y-1.5 text-cinema-muted">
             <p>📡 <span className="text-white font-semibold">Server Name:</span> {status?.appName || "Inaetia Studios"}</p>
             <p>🔗 <span className="text-white font-semibold">Address:</span> http://{status?.serverIp || window.location.hostname}:{status?.port || 3000}</p>
-            <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPad/iPhone Safari, Android Chrome, Smart TV</p>
+            <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPhone/iPad, Android, Chromecast/Firestick</p>
           </div>
         </div>
       </div>

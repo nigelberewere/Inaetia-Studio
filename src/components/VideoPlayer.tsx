@@ -466,7 +466,9 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
 
   // Format MM:SS or HH:MM:SS
   const formatTime = (timeInSeconds: number) => {
-    if (isNaN(timeInSeconds)) return "0:00";
+    if (timeInSeconds === undefined || timeInSeconds === null || isNaN(timeInSeconds) || !isFinite(timeInSeconds) || timeInSeconds < 0) {
+      return "--:--";
+    }
     const h = Math.floor(timeInSeconds / 3600);
     const m = Math.floor((timeInSeconds % 3600) / 60);
     const s = Math.floor(timeInSeconds % 60);
@@ -603,7 +605,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
               <input
                 type="range"
                 min={0}
-                max={duration || movie.duration || 100}
+                max={(isFinite(duration) && duration > 0) ? duration : ((isFinite(movie.duration) && movie.duration > 0) ? movie.duration : 100)}
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeekChange}
@@ -611,7 +613,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
                 title="Seek Timeline"
               />
               <span className="text-xs font-mono text-cinema-muted w-12 text-left">
-                {formatTime(duration || movie.duration || 0)}
+                {formatTime((isFinite(duration) && duration > 0) ? duration : movie.duration)}
               </span>
             </div>
           </div>
