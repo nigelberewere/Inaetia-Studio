@@ -4,8 +4,10 @@ import { safeFetch } from "../utils";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
   Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image,
-  HeartPulse, ShieldCheck, Activity, Sparkles, Folder, Save, Check
+  HeartPulse, ShieldCheck, Activity, Sparkles, Folder, Save, Check,
+  Radio, Link2, Monitor, Lightbulb
 } from "lucide-react";
+import { InaetiaLogo } from "../components/common/InaetiaLogo";
 
 interface LibraryHealth {
   totalItems: number;
@@ -22,7 +24,7 @@ interface LibraryHealth {
 }
 
 export default function Settings() {
-  const { status, fetchStatus, triggerRescan, loading, movies } = useApp();
+  const { status, fetchStatus, triggerRescan, loading, movies, showToast } = useApp();
   const [rescanning, setRescanning] = useState(false);
   const [clearingThumbs, setClearingThumbs] = useState(false);
   const [confirmClearThumbs, setConfirmClearThumbs] = useState(false);
@@ -185,13 +187,15 @@ export default function Settings() {
       const res = await safeFetch("/api/thumbnails/clear", { method: "POST" });
       if (res.ok) {
         setThumbsClearedMessage("Cleared! New smart thumbnails will generate as you browse.");
+        showToast("Thumbnail cache cleared successfully.", "success");
         setTimeout(() => setThumbsClearedMessage(""), 5000);
       } else {
-        throw new Error("Failed to clear thumbnail cache");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to clear thumbnail cache");
       }
     } catch (err: any) {
       console.error(err);
-      alert("Error clearing thumbnail cache: " + err.message);
+      showToast("Error clearing thumbnail cache: " + err.message, "error");
     } finally {
       setClearingThumbs(false);
     }
@@ -315,14 +319,16 @@ export default function Settings() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-24 animate-fade-in" id="settings-view-page">
       {/* Page Title */}
-      <div className="border-b border-cinema-border pb-5">
-        <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-          <SettingsIcon className="w-7 h-7 text-cinema-amber" />
-          Server Configuration
-        </h1>
-        <p className="text-cinema-muted text-xs md:text-sm mt-1">
-          Monitor your {status?.appName || "Inaetia Studios"} media assets, disk spaces, and local network hotspot health.
-        </p>
+      <div className="border-b border-cinema-border pb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+            <InaetiaLogo size={36} accentColor="#F5A623" id="settings-brand-logo" />
+            Server Configuration
+          </h1>
+          <p className="text-cinema-muted text-xs md:text-sm mt-1">
+            Monitor your {status?.appName || "Inaetia Studios"} media assets, disk spaces, and local network hotspot health.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -523,18 +529,30 @@ export default function Settings() {
         {/* Local Wi-Fi Connection Card */}
         <div className="bg-cinema-card border border-cinema-border rounded-2xl p-6 shadow-xl flex flex-col justify-between">
           <div>
-            <h3 className="font-bold text-white text-sm uppercase tracking-wider border-b border-cinema-border pb-2 flex items-center gap-1.5">
-              <Wifi className="w-4 h-4 text-cinema-amber" /> Local Offline Access Guide
-            </h3>
-            <p className="text-xs text-cinema-muted mt-3 leading-relaxed">
+            <div className="flex items-center justify-between border-b border-cinema-border pb-2 mb-3">
+              <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5">
+                <Wifi className="w-4 h-4 text-cinema-amber" /> Local Offline Access Guide
+              </h3>
+              <InaetiaLogo size={28} accentColor="#F5A623" />
+            </div>
+            <p className="text-xs text-cinema-muted leading-relaxed">
               This streaming app operates strictly inside your private local network router loop. No data leaves your home, and no external internet access is required.
             </p>
           </div>
 
-          <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-3 mt-4 text-[11px] font-mono space-y-1.5 text-cinema-muted">
-            <p>📡 <span className="text-white font-semibold">Server Name:</span> {status?.appName || "Inaetia Studios"}</p>
-            <p>🔗 <span className="text-white font-semibold">Address:</span> http://{status?.serverIp || window.location.hostname}:{status?.port || 3000}</p>
-            <p>💻 <span className="text-white font-semibold">Clients:</span> PC, iPhone/iPad, Android, Chromecast/Firestick</p>
+          <div className="bg-white/[0.01] border border-cinema-border rounded-xl p-3 mt-4 text-[11px] font-mono space-y-2 text-cinema-muted">
+            <p className="flex items-center gap-2">
+              <Radio className="w-3.5 h-3.5 text-cinema-amber shrink-0" />
+              <span><span className="text-white font-semibold">Server Name:</span> {status?.appName || "Inaetia Studios"}</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <Link2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span><span className="text-white font-semibold">Address:</span> http://{status?.serverIp || window.location.hostname}:{status?.port || 3000}</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <Monitor className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span><span className="text-white font-semibold">Clients:</span> PC, iPhone/iPad, Android, Smart TVs</span>
+            </p>
           </div>
         </div>
       </div>
@@ -652,9 +670,12 @@ export default function Settings() {
               </div>
             </div>
 
-            <p className="text-xs text-cinema-muted leading-relaxed bg-white/[0.01] border border-cinema-border rounded-xl p-4 mt-2">
-              💡 <span className="text-white font-semibold">Pro Tip:</span> Save your movies and TV series inside their own dedicated directories (e.g. <code className="text-cinema-amber">/mnt/storage/Videos/Movies/The Dark Knight/</code>) and let <span className="font-semibold text-white">Tiny Media Manager (TMM)</span> fetch metadata. Once saved alongside each file, hit <span className="text-white font-semibold">Rescan Media Library</span> above to load beautiful IMAX-quality covers and details!
-            </p>
+            <div className="text-xs text-cinema-muted leading-relaxed bg-white/[0.01] border border-cinema-border rounded-xl p-4 mt-2 flex items-start gap-3">
+              <Lightbulb className="w-5 h-5 text-cinema-amber shrink-0 mt-0.5" />
+              <div>
+                <span className="text-white font-semibold">Pro Tip:</span> Save your movies and TV series inside their own dedicated directories (e.g. <code className="text-cinema-amber">/mnt/storage/Videos/Movies/The Dark Knight/</code>) and let <span className="font-semibold text-white">Tiny Media Manager (TMM)</span> fetch metadata. Once saved alongside each file, hit <span className="text-white font-semibold">Rescan Media Library</span> above to load beautiful IMAX-quality covers and details!
+              </div>
+            </div>
           </div>
         ) : (
           <div className="text-center py-8 text-cinema-muted text-xs animate-pulse">

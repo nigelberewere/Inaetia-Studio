@@ -3,6 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Plus, X, Check, Lock, Shield, KeyRound } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ProfileAvatar, PRESET_AVATARS } from "./ProfileAvatar";
+import { InaetiaLogo } from "./common/InaetiaLogo";
 import { Profile } from "../types";
 
 const PRESET_COLORS = [
@@ -118,7 +119,14 @@ export default function WhosWatching() {
       <div className="max-w-4xl w-full text-center space-y-12">
         
         {/* Title Block */}
-        <div className="space-y-3">
+        <div className="space-y-4 flex flex-col items-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <InaetiaLogo size={64} accentColor="#F5A623" id="whos-watching-brand-logo" className="drop-shadow-[0_0_25px_rgba(245,166,35,0.3)]" />
+          </motion.div>
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}

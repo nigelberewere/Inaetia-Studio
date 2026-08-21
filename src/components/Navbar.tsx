@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useApp, ViewType } from "../context/AppContext";
 import { Search, Film, Music as MusicIcon, Tv as TvIcon, Settings, X, Users, Trash2, Radio as RadioIcon } from "lucide-react";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { InaetiaLogo } from "./common/InaetiaLogo";
 
 export default function Navbar() {
   const {
@@ -13,6 +14,8 @@ export default function Navbar() {
     setCurrentProfile,
     logoutProfile,
     clearProfileHistory,
+    appName,
+    themeColor,
   } = useApp();
 
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -68,15 +71,24 @@ export default function Navbar() {
         }}
         id="nav-logo"
       >
-        <div className="relative w-9.5 h-9.5 rounded-xl bg-gradient-to-br from-cinema-amber via-amber-500 to-amber-700 flex items-center justify-center transition-all duration-300 group-hover:scale-105 shadow-lg shadow-cinema-amber/25 group-hover:shadow-cinema-amber/40">
-          <svg className="w-5 h-5 text-cinema-bg" viewBox="0 0 24 24" fill="currentColor">
-            {/* Elegant cinematic stylized vertical stroke 'I' & play button */}
-            <rect x="5" y="5" width="2.5" height="14" rx="0.75" />
-            <path d="M10 5l9 7-9 7V5z" />
-          </svg>
+        <div className="relative group-hover:scale-105 transition-transform duration-300">
+          <InaetiaLogo size={36} accentColor={themeColor || "#F5A623"} id="nav-brand-logo" />
         </div>
         <span className="font-bold text-lg tracking-wider hidden sm:inline-block text-white group-hover:text-cinema-amber transition-colors">
-          Inaetia<span className="text-cinema-amber font-light"> Studios</span>
+          {appName ? (
+            appName.includes(" ") ? (
+              <>
+                {appName.split(" ")[0]}
+                <span className="text-cinema-amber font-light"> {appName.split(" ").slice(1).join(" ")}</span>
+              </>
+            ) : (
+              appName
+            )
+          ) : (
+            <>
+              Inaetia<span className="text-cinema-amber font-light"> Studios</span>
+            </>
+          )}
         </span>
       </div>
 

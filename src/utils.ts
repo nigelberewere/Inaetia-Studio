@@ -74,6 +74,8 @@ export function formatSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
+export const formatBytes = formatSize;
+
 export function formatCleanDate(rawDate?: string | number | null): string | null {
   if (!rawDate) return null;
 
@@ -257,12 +259,27 @@ export function cleanTrackTitle(rawTitle?: string | null): string {
   // Strip file extension if present
   str = str.replace(/\.(mp3|flac|m4a|wav|ogg|aac)$/i, "");
 
+  // Strip brackets like [FLAC], [320kbps], [Official]
+  str = str.replace(/\[[^\]]+\]/g, "");
+
+  // Replace underscores and dots with spaces for clean tokenization
+  str = str.replace(/[._]/g, " ");
+
   // Strip leading track numbers: e.g. "10. Home", "22. Away From Home", "01 - Title", "01. "
-  str = str.replace(/^\d{1,3}\s*[\.\-]\s*/, "");
+  str = str.replace(/^\d{1,3}\s*[\.\-_]\s*/, "");
   str = str.replace(/^\d{1,3}\s+/, "");
 
-  // Replace underscores with spaces & collapse whitespace
-  str = str.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  // Quality / codec tags with word boundaries
+  const qualityCodecTags = [
+    /\b480p\b/gi, /\b720p\b/gi, /\b1080p\b/gi, /\b2160p\b/gi, /\b4k\b/gi,
+    /\bx264\b/gi, /\bx265\b/gi, /\bh264\b/gi, /\bh265\b/gi, /\b320kbps\b/gi
+  ];
+  qualityCodecTags.forEach((tag) => {
+    str = str.replace(tag, " ");
+  });
+
+  // Collapse extra whitespace
+  str = str.replace(/\s+/g, " ").trim();
 
   return str || "Unknown Track";
 }

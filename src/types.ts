@@ -55,6 +55,7 @@ export interface Movie {
   // Metadata source tracking
   metadataSource?: "nfo" | "filename";
   hasRichMetadata?: boolean;
+  nfoMtime?: string;
 }
 
 export interface Track {
@@ -66,6 +67,7 @@ export interface Track {
   filepath: string;
   duration: number;
   size: number;
+  added?: string;
 }
 
 export interface StorageInfo {
@@ -101,12 +103,12 @@ export interface Channel {
   name: string;
   color: string;
   channelNumber: number;
-  sourceFolder: string;
+  sourceFolder?: string;
   poster?: string | null;
   fanart?: string | null;
   hasPoster?: boolean;
   hasFanart?: boolean;
-  currentProgram: {
+  currentProgram?: {
     id: string;
     title: string;
     filename: string;
@@ -132,6 +134,8 @@ export interface EPGItem {
   startTime: string; // ISO timestamp
   endTime: string;   // ISO timestamp
 }
+
+export type ChannelGuideItem = EPGItem;
 
 export interface WatchHistoryDetails {
   position: number;
@@ -208,9 +212,9 @@ export interface RadioStation {
   type: "smart" | "folder";
   sourceFolder?: string;
   trackCount: number;
-  currentTrack: Track | null;
-  nowPlayingArtist: string;
-  nowPlayingTitle: string;
+  currentTrack?: Track | null;
+  nowPlayingArtist?: string;
+  nowPlayingTitle?: string;
 }
 
 export interface RadioNowPlaying {
@@ -231,6 +235,45 @@ export interface RadioEPGItem {
   track: Track;
   startTime: string; // ISO
   endTime: string;   // ISO
+}
+
+export interface AuthSession {
+  profileId: string;
+  isAdmin: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface ShowGroup {
+  showTitle: string;
+  poster: string | null;
+  fanart: string | null;
+  year: number | null;
+  rating: number | null;
+  genres: string[];
+  plot: string | null;
+  studio: string | null;
+  totalEpisodes: number;
+  seasons: Record<string, Movie[]>;
+}
+
+export interface ScheduledItemResult<T> {
+  item: T;
+  activeIndex: number;
+  offsetSeconds: number;
+  startedAt: string;
+  endsAt: string;
+  loopNumber: number;
+  nextItem: T | null;
+}
+
+export interface MediaCacheData {
+  version?: number;
+  timestamp?: number;
+  movies: Movie[];
+  music: Track[];
+  moviesIndexList?: [string, string][];
+  musicIndexList?: [string, string][];
 }
 
 

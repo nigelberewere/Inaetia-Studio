@@ -222,13 +222,13 @@ export function getHlsTranscodeDecision(
 
   if (reencodeRequired) {
     console.log(
-      `[HLS Decision] ⚠️ File ${fileId} (${path.basename(filepath)}) REQUIRES RE-ENCODING (Heavy CPU): ` +
+      `[HLS Decision] [Transcode] File ${fileId} (${path.basename(filepath)}) REQUIRES RE-ENCODING (Heavy CPU): ` +
         `Video: ${probe.videoCodec} -> ${videoCopy ? "COPY" : "x264"}, ` +
         `Audio: ${probe.audioCodec} -> ${audioCopy ? "COPY" : "AAC stereo"}`
     );
   } else {
     console.log(
-      `[HLS Decision] ⚡ File ${fileId} (${path.basename(filepath)}) Stream-copy eligible (Fast remux): ` +
+      `[HLS Decision] [Remux] File ${fileId} (${path.basename(filepath)}) Stream-copy eligible (Fast remux): ` +
         `Video: ${probe.videoCodec} (Copy), Audio: ${probe.audioCodec} (Copy)`
     );
   }
@@ -654,7 +654,7 @@ export function runHlsCacheEviction(): void {
 
         totalSize -= item.size;
         const freedMB = (item.size / (1024 * 1024)).toFixed(1);
-        console.log(`[HLS Cache Eviction] 🧹 Evicted ${item.fileId} (${freedMB} MB)`);
+        console.log(`[HLS Cache Eviction] Evicted ${item.fileId} (${freedMB} MB)`);
       } catch (err) {
         console.error(`[HLS Cache Eviction] Failed to evict ${item.folderPath}:`, err);
       }
@@ -689,6 +689,46 @@ export function reapInactiveTranscodes(): void {
       }
     }
   }
+}
+
+export function getHlsProgress(fileId: string) {
+  const job = activeJobs.get(fileId);
+  const fileCacheDir = path.join(HLS_CACHE_ROOT, fileId);
+  const playlistPath = path.join(fileCacheDir, "index.m3u8");
+
+  let segmentsCount = 0;
+  if (fs.existsSync(fileCacheDir)) {
+    try {
+      const files = fs.readdirSync(fileCacheDir);
+      segmentsCount = files.filter((f) => f.endsWith(".m4s")).length;
+    } catch (_) {}
+  }
+
+  const isComplete = isHlsFullyCached(fileId);
+
+  return {
+    fileId,
+    status: job ? job.status : isComplete ? "completed" : "idle",
+    segmentsCount,
+    isComplete,
+    seekOffset: job ? job.seekOffset : 0,
+    startTime: job ? job.startTime : null,
+    error: job ? job.error : null,
+  };
+}
+
+export function stopHlsTranscode(fileId: string): boolean {
+  const job = activeJobs.get(fileId);
+  if (job && job.process) {
+    try {
+      job.process.kill("SIGKILL");
+    } catch (_) {}
+    job.status = "completed";
+    job.process = null;
+    activeJobs.delete(fileId);
+    return true;
+  }
+  return false;
 }
 
 // Periodically check and clean up inactive transcode processes (every 10 seconds)

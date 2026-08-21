@@ -3,9 +3,11 @@ import { useApp } from "../context/AppContext";
 import { safeFetch } from "../utils";
 import { 
   Server, Monitor, Cpu, Check, ShieldAlert, 
-  Folder, ArrowRight, ArrowLeft, Loader2, Play
+  Folder, ArrowRight, ArrowLeft, Loader2, Play,
+  Gauge, Zap, Rocket
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { InaetiaLogo } from "./common/InaetiaLogo";
 
 const PRESET_COLORS = [
   { name: "Amber Gold", hex: "#F5A623" },
@@ -330,7 +332,7 @@ export default function SetupWizard() {
               animate={{ 
                 scale: 1, 
                 opacity: 1,
-                y: [0, -10, 0],
+                y: [0, -8, 0],
               }}
               transition={{ 
                 delay: 0.2, 
@@ -338,18 +340,16 @@ export default function SetupWizard() {
                 ease: "easeOut",
                 y: {
                   repeat: Infinity,
-                  duration: 2.5,
+                  duration: 3,
                   ease: "easeInOut"
                 }
               }}
               className="flex justify-center mb-2"
             >
               <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cinema-amber to-amber-300 flex items-center justify-center shadow-[0_0_50px_rgba(245,166,35,0.3)] border border-white/20">
-                  <Play className="w-7 h-7 text-black fill-black ml-0.5" />
-                </div>
-                {/* Pulsing ring around the play icon */}
-                <span className="absolute -inset-2 rounded-2xl border border-cinema-amber/30 animate-ping opacity-75" />
+                <InaetiaLogo size={80} accentColor="#F5A623" className="drop-shadow-[0_0_35px_rgba(245,166,35,0.35)]" />
+                {/* Pulsing ring around the icon */}
+                <span className="absolute -inset-2 rounded-2xl border border-cinema-amber/30 animate-ping opacity-50 pointer-events-none" />
               </div>
             </motion.div>
 
@@ -625,7 +625,9 @@ export default function SetupWizard() {
                           perfProfile === "low" ? "border-cinema-amber shadow-lg shadow-cinema-amber/5" : "border-cinema-border"
                         }`}
                       >
-                        <div className="text-2xl pt-1">🐌</div>
+                        <div className="p-2 rounded-xl bg-white/5 text-cinema-muted border border-white/10 shrink-0">
+                          <Gauge className="w-5 h-5" />
+                        </div>
                         <div className="space-y-1 text-left flex-1">
                           <div className="flex justify-between items-center">
                             <span className="font-bold text-sm text-white">Low-end Hardware</span>
@@ -644,7 +646,9 @@ export default function SetupWizard() {
                           perfProfile === "mid" ? "border-cinema-amber shadow-lg shadow-cinema-amber/5" : "border-cinema-border"
                         }`}
                       >
-                        <div className="text-2xl pt-1">⚡</div>
+                        <div className="p-2 rounded-xl bg-cinema-amber/10 text-cinema-amber border border-cinema-amber/20 shrink-0">
+                          <Zap className="w-5 h-5" />
+                        </div>
                         <div className="space-y-1 text-left flex-1">
                           <div className="flex justify-between items-center">
                             <span className="font-bold text-sm text-white">Mid-range Hardware (Default)</span>
@@ -663,7 +667,9 @@ export default function SetupWizard() {
                           perfProfile === "high" ? "border-cinema-amber shadow-lg shadow-cinema-amber/5" : "border-cinema-border"
                         }`}
                       >
-                        <div className="text-2xl pt-1">🚀</div>
+                        <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+                          <Rocket className="w-5 h-5" />
+                        </div>
                         <div className="space-y-1 text-left flex-1">
                           <div className="flex justify-between items-center">
                             <span className="font-bold text-sm text-white">High-end Server / NAS</span>
@@ -741,21 +747,24 @@ export default function SetupWizard() {
                       </div>
 
                       {/* Color Preset Preview Block */}
-                      <div className="bg-black/20 border border-cinema-border/60 rounded-2xl p-4 text-center space-y-2 text-xs text-cinema-muted">
-                        <p>Live Theme Color Highlight Preview</p>
-                        <div className="flex gap-2 justify-center pt-1">
-                          <button 
-                            style={{ backgroundColor: selectedColor }}
-                            className="px-4 py-1.5 text-cinema-bg font-extrabold rounded-lg text-[10px] uppercase shadow-lg shadow-cinema-amber/10"
-                          >
-                            Sample Button
-                          </button>
-                          <span 
-                            style={{ color: selectedColor }}
-                            className="font-black text-xs flex items-center gap-1 font-mono uppercase"
-                          >
-                            Inaetia FM
-                          </span>
+                      <div className="bg-black/20 border border-cinema-border/60 rounded-2xl p-4 text-center space-y-3 text-xs text-cinema-muted">
+                        <p className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">Live Brand Theme Preview</p>
+                        <div className="flex items-center gap-4 justify-center pt-1">
+                          <InaetiaLogo size={44} accentColor={selectedColor} id="step4-logo-preview" />
+                          <div className="flex flex-col items-start gap-1">
+                            <span 
+                              style={{ color: selectedColor }}
+                              className="font-black text-sm flex items-center gap-1 uppercase tracking-wider"
+                            >
+                              {appNameInput || "Inaetia Studios"}
+                            </span>
+                            <button 
+                              style={{ backgroundColor: selectedColor }}
+                              className="px-3.5 py-1 text-cinema-bg font-extrabold rounded-lg text-[10px] uppercase shadow-lg shadow-cinema-amber/10"
+                            >
+                              Accent Active
+                            </button>
+                          </div>
                         </div>
                       </div>
 

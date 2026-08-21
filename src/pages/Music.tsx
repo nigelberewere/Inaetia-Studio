@@ -63,10 +63,12 @@ export default function Music() {
   if (music.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center bg-cinema-card border border-cinema-border rounded-2xl p-8 max-w-lg mx-auto">
-        <span className="text-4xl">🎵</span>
-        <h3 className="text-xl font-bold mt-4">No audio files scanned</h3>
+        <div className="p-4 rounded-full bg-white/5 border border-cinema-border mb-2 text-cinema-muted">
+          <MusicIcon className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold mt-2">No audio files scanned</h3>
         <p className="text-cinema-muted text-sm mt-2">
-          Place files like .mp3, .flac, .m4a, or .wav inside your `/mnt/storage/Music` folder to populate your audio library.
+          Place files like .mp3, .flac, .m4a, or .wav inside your configured music folder to populate your audio library.
         </p>
       </div>
     );

@@ -298,8 +298,9 @@ function ChannelCardItem({ ch, onSelectChannel }: ChannelCardItemProps) {
 
         {/* Live Indicator Watermark Bug (Bottom-Left) */}
         <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-1.5">
-          <span className="px-2 py-0.5 rounded-md bg-cinema-amber/90 text-cinema-bg font-black text-[9px] uppercase tracking-wider shadow-md">
-            🔴 LIVE
+          <span className="px-2 py-0.5 rounded-md bg-cinema-amber/90 text-cinema-bg font-black text-[9px] uppercase tracking-wider shadow-md flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+            LIVE
           </span>
           <span className="text-xs font-black text-white drop-shadow-md">
             {ch.name}
@@ -643,7 +644,7 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
         <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10">
           <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md shadow-lg tracking-widest pointer-events-none select-none">
             <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
-            🔴 LIVE BROADCAST
+            LIVE BROADCAST
           </span>
 
           {liveDrift > 3 ? (

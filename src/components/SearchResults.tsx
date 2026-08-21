@@ -1,6 +1,6 @@
 import React from "react";
 import { useApp } from "../context/AppContext";
-import { Film, Music, Play, Clock } from "lucide-react";
+import { Film, Music, Play, Clock, Search } from "lucide-react";
 import MovieCard from "./MovieCard";
 import { sanitizeTitle, cleanArtistName, cleanTrackTitle } from "../utils";
 
@@ -49,8 +49,10 @@ export default function SearchResults() {
   if (!hasResults) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center max-w-md mx-auto">
-        <span className="text-4xl">🔍</span>
-        <h3 className="text-xl font-bold mt-4">No results for "{searchQuery}"</h3>
+        <div className="p-4 rounded-full bg-cinema-card border border-cinema-border text-cinema-muted mb-2">
+          <Search className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-bold mt-2">No results for "{searchQuery}"</h3>
         <p className="text-cinema-muted text-sm mt-2">
           Double check your spelling or try search queries with generic terms like "Inaetia", "Intro", "Aesthetic", or "Sunrise".
         </p>

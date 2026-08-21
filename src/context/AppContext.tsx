@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, RadioStation, HeroRecommendation } from "../types";
 import { safeFetch } from "../utils";
+import { ToastContainer, ToastItem } from "../components/common/Toast";
 
 export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
 
@@ -15,6 +16,11 @@ interface AppContextType {
   error: string | null;
   refreshLibrary: () => Promise<void>;
   triggerRescan: () => Promise<void>;
+
+  // Toast notifications
+  toasts: ToastItem[];
+  showToast: (message: string, type?: "success" | "error" | "info", durationMs?: number) => void;
+  dismissToast: (id: string) => void;
 
   // Search
   searchQuery: string;
@@ -89,6 +95,25 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ViewType>("home");
   
+  // Toast notifications state
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info", durationMs = 4000) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newToast: ToastItem = { id, message, type, duration: durationMs };
+    setToasts((prev) => [...prev.slice(-4), newToast]);
+
+    if (durationMs > 0) {
+      setTimeout(() => {
+        dismissToast(id);
+      }, durationMs);
+    }
+  };
+
   // Setup Wizard States
   const [setupComplete, setSetupComplete] = useState<boolean>(true);
   const [themeColor, setThemeColor] = useState<string>("#F5A623");
@@ -403,12 +428,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         await refreshLibrary();
         await fetchStatus();
+        showToast("Library scan completed successfully.", "success");
       } else {
-        throw new Error("Failed to trigger server-side rescan");
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to trigger server-side rescan");
       }
     } catch (err: any) {
       console.error(err);
-      alert("Error scanning library: " + err.message);
+      showToast("Library scan failed: " + err.message, "error");
     } finally {
       setLoading(false);
     }
@@ -637,9 +664,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAppName,
         setupLoading,
         fetchSetupStatus,
+        toasts,
+        showToast,
+        dismissToast,
       }}
     >
       {children}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </AppContext.Provider>
   );
 }

@@ -10,17 +10,8 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       legacy({
-        targets: ['chrome >= 30', 'safari >= 7', 'not IE 11'],
-        polyfills: [
-          'es.promise',
-          'es.object.assign',
-          'es.array.from',
-          'es.map',
-          'es.set',
-          'es.symbol',
-          'es.array.iterator',
-          'es.object.keys'
-        ]
+        targets: ['defaults', 'chrome >= 80', 'safari >= 13.1', 'edge >= 80', 'firefox >= 78', 'not IE 11'],
+        modernPolyfills: false,
       })
     ],
     resolve: {

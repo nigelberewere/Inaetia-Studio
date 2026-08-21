@@ -865,10 +865,12 @@ export default function Movies() {
           filteredContent.showsList.length === 0 &&
           Object.keys(filteredContent.videosBySubcategory).length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center bg-cinema-card border border-cinema-border rounded-2xl p-8 max-w-lg mx-auto">
-              <span className="text-5xl">📼</span>
-              <h3 className="text-xl font-bold mt-4">Directory looks empty</h3>
+              <div className="p-4 rounded-full bg-white/5 border border-cinema-border mb-2 text-cinema-muted">
+                <Film className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold mt-2">Directory looks empty</h3>
               <p className="text-cinema-muted text-sm mt-2">
-                Make sure you place your video formats (.mp4, .mkv) in their respective folders under the hard drive mounting path `/mnt/storage/Videos`.
+                Make sure you place your video formats (.mp4, .mkv) in their respective folders under your configured video paths.
               </p>
             </div>
           )}

@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import Hero from "../components/Hero";
 import MovieCard from "../components/MovieCard";
 import MovieDetailModal from "../components/MovieDetailModal";
-import { Flame, Film, Disc, Clock } from "lucide-react";
+import { Flame, Film, Disc, Clock, AlertTriangle } from "lucide-react";
 import { Movie } from "../types";
 
 export default function Home() {
@@ -78,8 +78,10 @@ export default function Home() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center max-w-md mx-auto">
-        <span className="text-5xl">⚠️</span>
-        <h3 className="text-2xl font-bold mt-4 text-red-400">Library Sync Error</h3>
+        <div className="p-4 rounded-full bg-red-950/40 border border-red-800 text-red-400 mb-2">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h3 className="text-2xl font-bold mt-2 text-red-400">Library Sync Error</h3>
         <p className="text-cinema-muted text-sm mt-2">{error}</p>
         <button
           onClick={() => window.location.reload()}
