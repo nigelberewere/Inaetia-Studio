@@ -14,8 +14,71 @@ import { sanitizeMovieForClient } from "../auth";
 import { checkCache } from "../scanner";
 import { findArtwork, parseTvShowNfo } from "../../nfoReader";
 import { ShowGroup } from "../../types";
+import { normalizeSeriesName } from "../../utils";
 
 const router = express.Router();
+
+export function findShowArtworkPath(filepath: string, artType: "poster" | "fanart"): string | null {
+  if (!filepath || !fs.existsSync(filepath)) return null;
+
+  const dir = path.dirname(filepath);
+  const parentDir = path.dirname(dir);
+  const gpDir = path.dirname(parentDir);
+
+  const candidateDirs: string[] = [dir];
+  if (parentDir && parentDir !== dir) candidateDirs.push(parentDir);
+  if (gpDir && gpDir !== parentDir) candidateDirs.push(gpDir);
+
+  const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+  const posterNames = [
+    "poster",
+    "folder",
+    "cover",
+    "show",
+    "season-all-poster",
+    "movie",
+  ];
+  const fanartNames = [
+    "fanart",
+    "background",
+    "backdrop",
+    "art",
+    "show-fanart",
+    "season-all-fanart",
+  ];
+
+  const targetNames = artType === "poster" ? posterNames : fanartNames;
+
+  for (const cDir of candidateDirs) {
+    if (!fs.existsSync(cDir)) continue;
+    try {
+      const files = fs.readdirSync(cDir);
+      // 1. Exact base name check (e.g. poster.jpg, folder.png, fanart.webp)
+      for (const f of files) {
+        const ext = path.extname(f).toLowerCase();
+        if (!imageExtensions.includes(ext)) continue;
+        const base = path.basename(f, ext).toLowerCase();
+        if (targetNames.includes(base)) {
+          return path.join(cDir, f);
+        }
+      }
+      // 2. Suffix match check (e.g. show-name-poster.jpg, arcane-fanart.png)
+      for (const f of files) {
+        const ext = path.extname(f).toLowerCase();
+        if (!imageExtensions.includes(ext)) continue;
+        const base = path.basename(f, ext).toLowerCase();
+        if (artType === "poster" && (base.endsWith("-poster") || base.endsWith("-folder") || base.endsWith("-cover") || base.endsWith(" poster") || base.endsWith(" folder"))) {
+          return path.join(cDir, f);
+        }
+        if (artType === "fanart" && (base.endsWith("-fanart") || base.endsWith("-backdrop") || base.endsWith("-background") || base.endsWith(" fanart") || base.endsWith(" backdrop"))) {
+          return path.join(cDir, f);
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
 
 let activeRemuxCount = 0;
 const MAX_REMUX_STREAMS = 2;
@@ -259,66 +322,135 @@ router.get("/api/artwork/:id/:type", (req, res) => {
   }
 
   if (type === "showPoster") {
-    const dir = path.dirname(filepath);
-    let showDir = dir;
-    if (!fs.existsSync(path.join(dir, "tvshow.nfo")) && fs.existsSync(path.join(path.dirname(dir), "tvshow.nfo"))) {
-      showDir = path.dirname(dir);
-    }
-
-    let posterPath: string | null = null;
-    if (fs.existsSync(showDir)) {
-      try {
-        const files = fs.readdirSync(showDir);
-        const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-        const found = files.find((f) => {
-          const ext = path.extname(f).toLowerCase();
-          if (!imageExtensions.includes(ext)) return false;
-          const base = path.basename(f, ext).toLowerCase();
-          return base === "poster" || base === "folder";
-        });
-        if (found) {
-          posterPath = path.join(showDir, found);
-        }
-      } catch (err) {
-        console.error("Error reading show directory for artwork:", err);
-      }
-    }
-
+    const posterPath = findShowArtworkPath(filepath, "poster");
     if (streamImageIfExists(posterPath)) return;
     if (streamImageIfExists(artwork.poster)) return;
+    if (streamImageIfExists(artwork.thumb)) return;
     return res.redirect(`/api/thumbnail/${id}`);
   }
 
   if (type === "showFanart") {
-    const dir = path.dirname(filepath);
-    let showDir = dir;
-    if (!fs.existsSync(path.join(dir, "tvshow.nfo")) && fs.existsSync(path.join(path.dirname(dir), "tvshow.nfo"))) {
-      showDir = path.dirname(dir);
-    }
-
-    let fanartPath: string | null = null;
-    if (fs.existsSync(showDir)) {
-      try {
-        const files = fs.readdirSync(showDir);
-        const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-        const found = files.find((f) => {
-          const ext = path.extname(f).toLowerCase();
-          if (!imageExtensions.includes(ext)) return false;
-          const base = path.basename(f, ext).toLowerCase();
-          return base === "fanart" || base === "background";
-        });
-        if (found) {
-          fanartPath = path.join(showDir, found);
-        }
-      } catch (err) {
-        console.error("Error reading show directory for fanart:", err);
-      }
-    }
-
+    const fanartPath = findShowArtworkPath(filepath, "fanart");
     if (streamImageIfExists(fanartPath)) return;
     if (streamImageIfExists(artwork.fanart)) return;
     res.setHeader("Content-Type", "image/gif");
     return res.end(TRANSPARENT_GIF);
+  }
+
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/show-poster/:name
+router.get("/api/show-poster/:name", async (req, res) => {
+  const showName = decodeURIComponent(req.params.name || "");
+  const firstEpisodeId = req.query.firstEpisodeId as string | undefined;
+
+  let filepath: string | undefined;
+  let targetEpisodeId: string | undefined;
+
+  if (firstEpisodeId) {
+    filepath = moviesIndex.get(firstEpisodeId);
+    if (filepath && fs.existsSync(filepath)) {
+      targetEpisodeId = firstEpisodeId;
+    }
+  }
+
+  if (!filepath) {
+    const norm = normalizeSeriesName(showName);
+    const ep = moviesCache.find(
+      (m) =>
+        (m.showName && normalizeSeriesName(m.showName) === norm) ||
+        (m.showTitle && normalizeSeriesName(m.showTitle) === norm) ||
+        (m.title && normalizeSeriesName(m.title) === norm)
+    );
+    if (ep) {
+      filepath = moviesIndex.get(ep.id);
+      if (filepath && fs.existsSync(filepath)) {
+        targetEpisodeId = ep.id;
+      }
+    }
+  }
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+
+  const posterPath = findShowArtworkPath(filepath, "poster");
+  if (posterPath && fs.existsSync(posterPath)) {
+    const ext = path.extname(posterPath).toLowerCase();
+    res.setHeader("Content-Type", getMimeType(ext));
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return fs.createReadStream(posterPath).pipe(res);
+  }
+
+  const individualArt = findArtwork(filepath);
+  if (individualArt.poster && fs.existsSync(individualArt.poster)) {
+    const ext = path.extname(individualArt.poster).toLowerCase();
+    res.setHeader("Content-Type", getMimeType(ext));
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return fs.createReadStream(individualArt.poster).pipe(res);
+  }
+
+  if (individualArt.thumb && fs.existsSync(individualArt.thumb)) {
+    const ext = path.extname(individualArt.thumb).toLowerCase();
+    res.setHeader("Content-Type", getMimeType(ext));
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return fs.createReadStream(individualArt.thumb).pipe(res);
+  }
+
+  if (targetEpisodeId) {
+    return res.redirect(`/api/thumbnail/${targetEpisodeId}`);
+  }
+
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/show-fanart/:name
+router.get("/api/show-fanart/:name", async (req, res) => {
+  const showName = decodeURIComponent(req.params.name || "");
+  const firstEpisodeId = req.query.firstEpisodeId as string | undefined;
+
+  let filepath: string | undefined;
+
+  if (firstEpisodeId) {
+    filepath = moviesIndex.get(firstEpisodeId);
+  }
+
+  if (!filepath) {
+    const norm = normalizeSeriesName(showName);
+    const ep = moviesCache.find(
+      (m) =>
+        (m.showName && normalizeSeriesName(m.showName) === norm) ||
+        (m.showTitle && normalizeSeriesName(m.showTitle) === norm) ||
+        (m.title && normalizeSeriesName(m.title) === norm)
+    );
+    if (ep) {
+      filepath = moviesIndex.get(ep.id);
+    }
+  }
+
+  if (!filepath || !fs.existsSync(filepath)) {
+    res.setHeader("Content-Type", "image/gif");
+    return res.end(TRANSPARENT_GIF);
+  }
+
+  const fanartPath = findShowArtworkPath(filepath, "fanart");
+  if (fanartPath && fs.existsSync(fanartPath)) {
+    const ext = path.extname(fanartPath).toLowerCase();
+    res.setHeader("Content-Type", getMimeType(ext));
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return fs.createReadStream(fanartPath).pipe(res);
+  }
+
+  const individualArt = findArtwork(filepath);
+  if (individualArt.fanart && fs.existsSync(individualArt.fanart)) {
+    const ext = path.extname(individualArt.fanart).toLowerCase();
+    res.setHeader("Content-Type", getMimeType(ext));
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return fs.createReadStream(individualArt.fanart).pipe(res);
   }
 
   res.setHeader("Content-Type", "image/gif");

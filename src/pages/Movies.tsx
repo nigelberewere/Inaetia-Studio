@@ -65,6 +65,47 @@ export default function Movies() {
     return undefined;
   };
 
+  // Helper to extract show name from metadata, filepath, or filename
+  const getShowNameFromMovie = (m: Movie): string => {
+    if (m.showName && m.showName.trim()) return m.showName.trim();
+    if (m.showTitle && m.showTitle.trim()) return m.showTitle.trim();
+
+    if (m.filepath) {
+      const parts = m.filepath.replace(/\\/g, "/").split("/").filter(Boolean);
+      let seasonIdx = -1;
+      for (let i = 0; i < parts.length; i++) {
+        if (/^(season|s|series|specials?)\s*\d+/i.test(parts[i])) {
+          seasonIdx = i;
+          break;
+        }
+      }
+      if (seasonIdx > 0) {
+        const cand = parts[seasonIdx - 1];
+        if (!/^(tv\s*shows?|tv\s*series|series|shows|videos|media)$/i.test(cand)) {
+          return cand.replace(/_/g, " ").trim();
+        }
+      }
+      if (parts.length >= 2) {
+        const parent = parts[parts.length - 2];
+        if (!/^(tv\s*shows?|tv\s*series|series|shows|videos|media)$/i.test(parent)) {
+          return parent.replace(/_/g, " ").trim();
+        }
+      }
+    }
+
+    if (m.filename) {
+      const match = m.filename.match(/^(.+?)\s*[-_.]?\s*(?:s\d+|season|\d+x\d+|episode|ep\b)/i);
+      if (match && match[1]) {
+        const raw = match[1].replace(/[._]/g, " ").trim();
+        if (raw.length > 1 && !/^(season|episode|ep|part)\b/i.test(raw)) {
+          return raw;
+        }
+      }
+    }
+
+    return m.title || "Unknown Show";
+  };
+
   // Group all episodes into unique TV Shows using normalized series name to prevent duplicates
   const shows = useMemo(() => {
     const showMap = new Map<string, { 
@@ -79,36 +120,40 @@ export default function Movies() {
     }>();
     
     movies.forEach((m) => {
-      if (m.type === "episode" && m.showName) {
-        const normKey = normalizeSeriesName(m.showName);
-        if (!showMap.has(normKey)) {
-          showMap.set(normKey, {
-            name: m.showName.trim(),
-            episodes: [],
-            category: m.category || "Tv Shows",
-            plot: m.showPlot || null,
-            year: m.showYear || null,
-            rating: m.showRating || null,
-            genres: m.showGenres || [],
-            studio: m.showStudio || null,
-          });
-        }
-        const existing = showMap.get(normKey)!;
-        // Keep the cleaner/longer title if available
-        if (m.showName.trim().length > existing.name.length || (m.showPlot && !existing.plot)) {
-          existing.name = m.showName.trim();
-        }
-        if (!existing.plot && m.showPlot) existing.plot = m.showPlot;
-        if (!existing.year && m.showYear) existing.year = m.showYear;
-        if (!existing.rating && m.showRating) existing.rating = m.showRating;
-        if (!existing.studio && m.showStudio) existing.studio = m.showStudio;
-        if ((!existing.genres || existing.genres.length === 0) && m.showGenres && m.showGenres.length > 0) {
-          existing.genres = m.showGenres;
-        }
+      const isEpisode = m.type === "episode" || m.category === "Tv Shows" || (m.season !== undefined && m.season !== null);
+      if (isEpisode) {
+        const sName = getShowNameFromMovie(m);
+        if (sName) {
+          const normKey = normalizeSeriesName(sName);
+          if (!showMap.has(normKey)) {
+            showMap.set(normKey, {
+              name: sName.trim(),
+              episodes: [],
+              category: m.category || "Tv Shows",
+              plot: m.showPlot || null,
+              year: m.showYear || null,
+              rating: m.showRating || null,
+              genres: m.showGenres || [],
+              studio: m.showStudio || null,
+            });
+          }
+          const existing = showMap.get(normKey)!;
+          // Prefer canonical names (with year or from NFO)
+          if ((sName.trim().length > existing.name.length && !existing.name.includes("(")) || (m.showPlot && !existing.plot)) {
+            existing.name = sName.trim();
+          }
+          if (!existing.plot && m.showPlot) existing.plot = m.showPlot;
+          if (!existing.year && m.showYear) existing.year = m.showYear;
+          if (!existing.rating && m.showRating) existing.rating = m.showRating;
+          if (!existing.studio && m.showStudio) existing.studio = m.showStudio;
+          if ((!existing.genres || existing.genres.length === 0) && m.showGenres && m.showGenres.length > 0) {
+            existing.genres = m.showGenres;
+          }
 
-        // Avoid adding duplicate episodes
-        if (!existing.episodes.some((ep) => ep.id === m.id || ep.filepath === m.filepath)) {
-          existing.episodes.push(m);
+          // Avoid adding duplicate episodes
+          if (!existing.episodes.some((ep) => ep.id === m.id || ep.filepath === m.filepath)) {
+            existing.episodes.push(m);
+          }
         }
       }
     });

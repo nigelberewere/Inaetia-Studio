@@ -121,8 +121,11 @@ export function normalizeSeriesName(name: string = ""): string {
   return name
     .trim()
     .toLowerCase()
+    .replace(/\s*\(\s*(?:19|20)\d\d\s*\)\s*$/, "") // Strip trailing (2014), (2024), etc.
+    .replace(/\s*\[\s*(?:19|20)\d\d\s*\]\s*$/, "") // Strip trailing [2014], [2024], etc.
     .replace(/[^\w\s]/gi, "")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function pluralize(count: number, singular: string, plural?: string): string {

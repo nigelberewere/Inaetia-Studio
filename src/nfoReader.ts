@@ -100,8 +100,8 @@ export function parseTvShowNfo(nfoPath: string): TvShowMetadata | null {
 }
 
 export function parseSeasonEpisode(filename: string): { season: number | null; episode: number | null } {
-  // S01E02 or s1e2
-  const sPattern = filename.match(/s(\d+)e(\d+)/i);
+  // S01E02 or s1e2 or S01.E02 or S01_E02 or S01-E02
+  const sPattern = filename.match(/s(\d+)[\s._-]*e(\d+)/i);
   if (sPattern) {
     return { season: parseInt(sPattern[1], 10), episode: parseInt(sPattern[2], 10) };
   }
@@ -110,12 +110,38 @@ export function parseSeasonEpisode(filename: string): { season: number | null; e
   if (xPattern) {
     return { season: parseInt(xPattern[1], 10), episode: parseInt(xPattern[2], 10) };
   }
-  // Season 1 Episode 2
-  const textPattern = filename.match(/season\s*(\d+)\s*episode\s*(\d+)/i);
+  // Season 1 Episode 2 or Season 01 - Episode 02
+  const textPattern = filename.match(/season\s*(\d+)[^\d]*episode\s*(\d+)/i);
   if (textPattern) {
     return { season: parseInt(textPattern[1], 10), episode: parseInt(textPattern[2], 10) };
   }
+  // Season 1 - 02 or Season 01 - 02
+  const seasonNumPattern = filename.match(/season\s*(\d+)[^\d]+(\d+)/i);
+  if (seasonNumPattern) {
+    return { season: parseInt(seasonNumPattern[1], 10), episode: parseInt(seasonNumPattern[2], 10) };
+  }
+  // Episode 2 or Ep 2 or EP.02 (assume season 1 if not specified)
+  const epOnlyPattern = filename.match(/(?:^|[^\w])(?:ep|episode|ep\.)\s*(\d+)/i);
+  if (epOnlyPattern) {
+    return { season: 1, episode: parseInt(epOnlyPattern[1], 10) };
+  }
   return { season: null, episode: null };
+}
+
+export function extractShowTitleFromFilename(filename: string): string | null {
+  if (!filename) return null;
+  const ext = path.extname(filename);
+  const baseName = path.basename(filename, ext);
+
+  // Match Show Name before S01E02 / 1x02 / Season 1 / Ep 1
+  const match = baseName.match(/^(.+?)\s*[-_.]?\s*(?:s\d+[\s._-]*e\d+|\d+x\d+|season\s*\d+|episode\s*\d+|ep\s*\d+)/i);
+  if (match && match[1]) {
+    const raw = match[1].replace(/[._]/g, " ").trim();
+    if (raw.length > 1 && !/^(season|episode|ep|part)\b/i.test(raw)) {
+      return raw;
+    }
+  }
+  return null;
 }
 
 export interface ArtworkPaths {

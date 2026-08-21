@@ -39,10 +39,14 @@ export default function TVShowDetailModal({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [scrollProgress, setScrollProgress] = useState(0); // 0 (expanded) to 1 (collapsed)
 
+  const activeSeason = (selectedSeason && showDetails.seasons.includes(selectedSeason))
+    ? selectedSeason
+    : showDetails.seasons[0] || "Season 1";
+
   // Get current season episodes
   const currentSeasonEpisodes = useMemo(() => {
-    return showDetails.episodesBySeason.get(selectedSeason) || [];
-  }, [showDetails, selectedSeason]);
+    return showDetails.episodesBySeason.get(activeSeason) || showDetails.episodesBySeason.get(showDetails.seasons[0]) || [];
+  }, [showDetails, activeSeason]);
 
   // First episode thumbnail or poster for artwork
   const firstEpisode = currentSeasonEpisodes[0] || showDetails.episodesBySeason.get(showDetails.seasons[0])?.[0];
@@ -255,7 +259,7 @@ export default function TVShowDetailModal({
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-cinema-muted mt-0.5">
-                  <span className="text-zinc-300 font-semibold">{selectedSeason}</span>
+                  <span className="text-zinc-300 font-semibold">{activeSeason}</span>
                   <span>•</span>
                   <span>{pluralize(currentSeasonEpisodes.length, "episode")}</span>
                   {showDetails.year && (
@@ -282,7 +286,7 @@ export default function TVShowDetailModal({
               Seasons:
             </span>
             {showDetails.seasons.map((season) => {
-              const isSelected = selectedSeason === season;
+              const isSelected = activeSeason === season;
               const count = (showDetails.episodesBySeason.get(season) || []).length;
               return (
                 <button
@@ -319,7 +323,7 @@ export default function TVShowDetailModal({
           <div className="flex items-center justify-between pb-1">
             <h4 className="text-xs sm:text-sm font-bold text-cinema-amber uppercase tracking-wider flex items-center gap-2">
               <Layers className="w-4 h-4 text-cinema-amber" />
-              {selectedSeason} Episodes ({pluralize(currentSeasonEpisodes.length, "Episode")})
+              {activeSeason} Episodes ({pluralize(currentSeasonEpisodes.length, "Episode")})
             </h4>
             <span className="text-[11px] text-cinema-muted">
               Click any episode to start streaming

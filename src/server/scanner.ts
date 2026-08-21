@@ -30,6 +30,7 @@ import {
   parseTvShowNfo,
   parseSeasonEpisode,
   cleanFilenameTitle,
+  extractShowTitleFromFilename,
 } from "../nfoReader";
 import { cleanArtistName, cleanTrackTitle } from "../utils";
 import { loadProfiles, saveProfiles } from "./routes/profiles";
@@ -150,6 +151,10 @@ export function parseVideoPath(relativePath: string, filename: string, title: st
   let seasonName = "";
   let episodeTitle = title;
 
+  const fnShowTitle = extractShowTitleFromFilename(filename);
+  const epPattern = parseSeasonEpisode(filename);
+  const hasEpisodePattern = epPattern.season !== null || epPattern.episode !== null;
+
   if (parts.length > 0) {
     const rootDir = parts[0];
     const rootLower = rootDir.toLowerCase();
@@ -174,16 +179,18 @@ export function parseVideoPath(relativePath: string, filename: string, title: st
 
     if (seasonIndex !== -1) {
       type = "episode";
+      category = "Tv Shows";
       seasonName = parts[seasonIndex];
       if (seasonIndex > 0) {
         showName = parts[seasonIndex - 1];
       }
       const showLower = showName.toLowerCase();
-      if (/^(tv\s*shows?|tv\s*series|series|shows)$/i.test(showLower) && seasonIndex > 1) {
+      if (/^(tv\s*shows?|tv\s*series|series|shows|anime)$/i.test(showLower) && seasonIndex > 1) {
         showName = parts[seasonIndex - 2];
       }
     } else if (isExplicitTvRoot) {
       type = "episode";
+      category = "Tv Shows";
       if (parts.length >= 3) {
         showName = parts[1];
         seasonName = "Season 1";
@@ -191,10 +198,23 @@ export function parseVideoPath(relativePath: string, filename: string, title: st
         showName = parts[0];
         seasonName = "Season 1";
       }
+    } else if (hasEpisodePattern) {
+      // Filename indicates an episode (e.g. S01E01)
+      type = "episode";
+      category = "Tv Shows";
+      if (parts.length >= 2) {
+        const parentFolder = parts[parts.length - 2];
+        if (!/^(movies?|films?|cinema|videos|media|other)$/i.test(parentFolder.toLowerCase())) {
+          showName = parentFolder;
+        }
+      }
+      if (!showName && fnShowTitle) {
+        showName = fnShowTitle;
+      }
     } else if (/^(movies?|films?|cinema)$/i.test(rootLower)) {
       type = "movie";
       category = "Movies";
-    } else if (/^(cartoons?|animation|anime)$/i.test(rootLower)) {
+    } else if (/^(cartoons?|animation)$/i.test(rootLower)) {
       category = "Cartoons";
       type = "movie";
     } else if (rootLower.includes("marvel")) {
@@ -208,9 +228,17 @@ export function parseVideoPath(relativePath: string, filename: string, title: st
     }
   }
 
+  // If still no showName but we extracted one from filename
+  if (!showName && fnShowTitle) {
+    showName = fnShowTitle;
+    type = "episode";
+    category = "Tv Shows";
+  }
+
   if (showName) {
     showName = showName.replace(/_/g, " ").replace(/-/g, " ");
   }
+
   if (seasonName) {
     const match = seasonName.match(/^(season|s)\s*(\d+)/i);
     if (match) {
@@ -219,7 +247,11 @@ export function parseVideoPath(relativePath: string, filename: string, title: st
       seasonName = seasonName.replace(/_/g, " ").replace(/-/g, " ");
     }
   } else if (type === "episode") {
-    seasonName = "Season 1";
+    if (epPattern.season !== null) {
+      seasonName = `Season ${epPattern.season}`;
+    } else {
+      seasonName = "Season 1";
+    }
   }
 
   const ext = path.extname(filename);
@@ -362,6 +394,10 @@ export async function scanAllLibraries() {
         cachedItem.fanart = artwork.fanart ? `/api/artwork/${cachedItem.id}/fanart` : null;
         cachedItem.thumb = artwork.thumb ? `/api/artwork/${cachedItem.id}/thumb` : `/api/artwork/${cachedItem.id}/thumb`;
         cachedItem.thumbnail = `/api/artwork/${cachedItem.id}/thumb`;
+        if (cachedItem.type === "episode" || cachedItem.category === "Tv Shows") {
+          cachedItem.showPoster = `/api/artwork/${cachedItem.id}/showPoster`;
+          cachedItem.showFanart = `/api/artwork/${cachedItem.id}/showFanart`;
+        }
 
         return cachedItem;
       }
@@ -515,9 +551,9 @@ export async function scanAllLibraries() {
         hasFanart: !!artwork.fanart,
         hasThumb: !!artwork.thumb,
         type,
-        showTitle,
-        showPoster: showPosterExists ? `/api/artwork/${id}/showPoster` : null,
-        showFanart: showFanartExists ? `/api/artwork/${id}/showFanart` : null,
+        showTitle: showTitle || parsedMeta.showName || undefined,
+        showPoster: isTvShow ? `/api/artwork/${id}/showPoster` : null,
+        showFanart: isTvShow ? `/api/artwork/${id}/showFanart` : null,
         season,
         episode,
         episodeTitle,
