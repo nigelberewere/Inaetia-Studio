@@ -187,6 +187,8 @@ export interface Profile {
   name: string;
   avatar: string;
   color: string;
+  hasPin?: boolean;
+  isAdmin?: boolean;
   createdAt: string;
   watchHistory: Record<string, WatchHistoryDetails>;
   recentlyShownLog?: RecentlyShownLog[];

@@ -15,7 +15,6 @@ interface HeroProps {
 export default function Hero({ movies = [], movie, recommendations = [] }: HeroProps) {
   const { setCurrentVideo } = useApp();
   const [showInfo, setShowInfo] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -247,29 +246,6 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
                     <div><span className="text-cinema-muted">Studio:</span> <span className="text-white font-medium">{activeMovie.studio}</span></div>
                   )}
                 </div>
-
-                {/* Advanced Diagnostics (Gated) */}
-                {showAdvanced ? (
-                  <div className="pt-2 border-t border-white/10 space-y-1 font-mono text-[10px] animate-fade-in">
-                    <div><span className="text-cinema-muted">File ID:</span> <span className="text-white select-all">{activeMovie.id}</span></div>
-                    <div><span className="text-cinema-muted">Server Path:</span> <span className="text-white break-all">{activeMovie.filepath}</span></div>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvanced(false)}
-                      className="text-[10px] text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
-                    >
-                      Hide Advanced Identifiers
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowAdvanced(true)}
-                    className="text-[10px] text-cinema-muted hover:text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
-                  >
-                    Show Advanced Identifiers & Server Path
-                  </button>
-                )}
               </div>
             )}
           </div>

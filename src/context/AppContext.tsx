@@ -62,8 +62,11 @@ interface AppContextType {
   profiles: Profile[];
   loadingProfiles: boolean;
   fetchProfiles: () => Promise<void>;
-  createProfile: (name: string, color: string, avatar: string) => Promise<Profile>;
-  deleteProfile: (id: string) => Promise<void>;
+  createProfile: (name: string, color: string, avatar: string, pin?: string, isAdmin?: boolean) => Promise<Profile>;
+  loginProfile: (profile: Profile, pin?: string) => Promise<boolean>;
+  deleteProfile: (id: string, pin?: string) => Promise<void>;
+  updateProfilePin: (id: string, currentPin?: string, newPin?: string) => Promise<void>;
+  logoutProfile: () => void;
   clearProfileHistory: () => Promise<void>;
   continueWatching: WatchHistoryItem[];
   fetchContinueWatching: () => Promise<void>;
@@ -150,30 +153,106 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Create a new profile
-  const createProfile = async (name: string, color: string, avatar: string): Promise<Profile> => {
+  const createProfile = async (name: string, color: string, avatar: string, pin?: string, isAdmin?: boolean): Promise<Profile> => {
     const res = await safeFetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, color, avatar }),
+      body: JSON.stringify({ name, color, avatar, pin, isAdmin }),
     });
     if (!res.ok) {
-      throw new Error("Failed to create profile");
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to create profile");
     }
-    const newProfile = await res.json();
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem("inaetia_token", data.token);
+    }
     await fetchProfiles();
-    return newProfile;
+    return data;
+  };
+
+  // Log in to a profile (with PIN verification if required)
+  const loginProfile = async (profile: Profile, pin?: string): Promise<boolean> => {
+    try {
+      if (profile.hasPin) {
+        if (!pin) throw new Error("PIN is required for this profile");
+        const res = await safeFetch(`/api/profiles/${profile.id}/verify-pin`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Incorrect PIN");
+        }
+        const data = await res.json();
+        if (data.token) {
+          localStorage.setItem("inaetia_token", data.token);
+        }
+        setCurrentProfile(data.profile || profile);
+        return true;
+      } else {
+        const res = await safeFetch(`/api/profiles/${profile.id}/session`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            localStorage.setItem("inaetia_token", data.token);
+          }
+        }
+        setCurrentProfile(profile);
+        return true;
+      }
+    } catch (err: any) {
+      throw err;
+    }
+  };
+
+  // Log out of current profile
+  const logoutProfile = () => {
+    localStorage.removeItem("inaetia_token");
+    setCurrentProfile(null);
+    setContinueWatching([]);
+    setRecommendations([]);
   };
 
   // Delete a profile
-  const deleteProfile = async (id: string) => {
-    const res = await safeFetch(`/api/profiles/${id}`, { method: "DELETE" });
+  const deleteProfile = async (id: string, pin?: string) => {
+    const res = await safeFetch(`/api/profiles/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin }),
+    });
     if (!res.ok) {
-      throw new Error("Failed to delete profile");
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to delete profile");
     }
     await fetchProfiles();
     if (currentProfile?.id === id) {
-      setCurrentProfile(null);
+      logoutProfile();
     }
+  };
+
+  // Update profile PIN
+  const updateProfilePin = async (id: string, currentPin?: string, newPin?: string) => {
+    const res = await safeFetch(`/api/profiles/${id}/pin`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPin, newPin }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to update PIN");
+    }
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem("inaetia_token", data.token);
+    }
+    if (currentProfile?.id === id) {
+      setCurrentProfile(data.profile || { ...currentProfile, hasPin: Boolean(newPin) });
+    }
+    await fetchProfiles();
   };
 
   // Clear entire watch history
@@ -541,7 +620,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadingProfiles,
         fetchProfiles,
         createProfile,
+        loginProfile,
+        logoutProfile,
         deleteProfile,
+        updateProfilePin,
         clearProfileHistory,
         continueWatching,
         fetchContinueWatching,

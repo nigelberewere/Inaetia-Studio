@@ -25,10 +25,32 @@ export function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise
     ? input 
     : (input instanceof URL ? input.toString() : (input instanceof Request ? input.url : ""));
   const absoluteUrl = getAbsoluteUrl(url);
+
+  // Propagate authentication token if present
+  let authHeaders: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    try {
+      const token = localStorage.getItem("inaetia_auth_token");
+      if (token) {
+        authHeaders["x-profile-token"] = token;
+      }
+    } catch (_) {}
+  }
+
+  const customHeaders = {
+    ...authHeaders,
+    ...(init?.headers || {}),
+  };
+
+  const customInit: RequestInit = {
+    ...init,
+    headers: customHeaders,
+  };
+
   if (typeof input === "string" || input instanceof URL) {
-    return fetch(absoluteUrl, init);
+    return fetch(absoluteUrl, customInit);
   } else {
-    return fetch(new Request(absoluteUrl, input), init);
+    return fetch(new Request(absoluteUrl, input), customInit);
   }
 }
 
@@ -160,13 +182,13 @@ export function sanitizeTitle(rawTitle?: string | null, filename?: string | null
   // 3. Trailing hyphenated release group e.g. -ETRG, -YIFY, -LOL, -SPARKS, -mSD, -MeGusta, -FLUX
   str = str.replace(/-\s*[A-Za-z0-9]+$/i, "");
 
-  // 4. Common quality / source / codec / release group tag patterns (case-insensitive)
+  // 4. Common quality / source / codec / release group tag patterns (case-insensitive with word boundaries)
   const qualityCodecTags = [
-    /480p/gi, /576p/gi, /720p/gi, /1080p/gi, /2160p/gi, /4k/gi, /uhd/gi,
-    /dvdrip/gi, /dvd-rip/gi, /brrip/gi, /bdrip/gi, /bluray/gi, /blu-ray/gi,
-    /webrip/gi, /web-rip/gi, /webdl/gi, /web-dl/gi, /hdtv/gi, /hdrip/gi,
-    /xvid/gi, /divx/gi, /x264/gi, /x265/gi, /h264/gi, /h265/gi, /hevc/gi,
-    /aac/gi, /ac3/gi, /dts/gi, /dd5\.1/gi, /eztv/gi, /rarbg/gi, /yts/gi, /yify/gi, /etrg/gi
+    /\b480p\b/gi, /\b576p\b/gi, /\b720p\b/gi, /\b1080p\b/gi, /\b2160p\b/gi, /\b4k\b/gi, /\buhd\b/gi,
+    /\bdvdrip\b/gi, /\bdvd-rip\b/gi, /\bbrrip\b/gi, /\bbdrip\b/gi, /\bbluray\b/gi, /\bblu-ray\b/gi,
+    /\bwebrip\b/gi, /\bweb-rip\b/gi, /\bwebdl\b/gi, /\bweb-dl\b/gi, /\bhdtv\b/gi, /\bhdrip\b/gi,
+    /\bxvid\b/gi, /\bdivx\b/gi, /\bx264\b/gi, /\bx265\b/gi, /\bh264\b/gi, /\bh265\b/gi, /\bhevc\b/gi,
+    /\baac\b/gi, /\bac3\b/gi, /\bdts\b/gi, /\bdd5\.1\b/gi, /\beztv\b/gi, /\brarbg\b/gi, /\byts\b/gi, /\byify\b/gi, /\betrg\b/gi
   ];
 
   qualityCodecTags.forEach((tag) => {

@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { exec, spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -53,6 +53,135 @@ function resolveHome(filepath: string): string {
     return path.join(os.homedir(), filepath.slice(1));
   }
   return filepath;
+}
+
+// ----------------------------------------------------
+// Security & Path Traversal Guards
+// ----------------------------------------------------
+const RESTRICTED_SYSTEM_ROOTS = [
+  "/etc",
+  "/proc",
+  "/sys",
+  "/root",
+  "/var/run",
+  "/var/log",
+  "/dev",
+  "/boot",
+  "/lib",
+  "/lib64",
+  "/usr",
+  "/bin",
+  "/sbin",
+  "/run",
+];
+
+export function isPathSafe(rawPath: string): { safe: boolean; reason?: string; resolvedPath: string } {
+  if (!rawPath || typeof rawPath !== "string") {
+    return { safe: false, reason: "Path is empty or invalid", resolvedPath: "" };
+  }
+  // Check for null bytes, carriage returns, or control characters
+  if (/[\0\r\n\x1b]/.test(rawPath)) {
+    return { safe: false, reason: "Path contains illegal control characters", resolvedPath: "" };
+  }
+
+  const expanded = resolveHome(rawPath.trim());
+  const normalized = path.resolve(expanded);
+
+  // Disallow bare root directory
+  if (normalized === "/") {
+    return { safe: false, reason: "Access to root directory is forbidden", resolvedPath: normalized };
+  }
+
+  // Disallow restricted system directories
+  for (const restricted of RESTRICTED_SYSTEM_ROOTS) {
+    if (normalized === restricted || normalized.startsWith(restricted + "/")) {
+      return { safe: false, reason: `Access to system directory (${restricted}) is restricted`, resolvedPath: normalized };
+    }
+  }
+
+  // Disallow hidden sensitive config files and dotfolders
+  const baseName = path.basename(normalized);
+  if (/^\.(env|git|ssh|aws|config|bashrc|profile)/i.test(baseName) || normalized.includes("/.ssh") || normalized.includes("/.git")) {
+    return { safe: false, reason: "Access to sensitive configuration directories is restricted", resolvedPath: normalized };
+  }
+
+  return { safe: true, resolvedPath: normalized };
+}
+
+// Sanitize string for .env storage (strip newlines, control characters, and escape double quotes)
+export function sanitizeEnvVal(val: any): string {
+  if (val === undefined || val === null) return "";
+  const str = String(val);
+  const clean = str.replace(/[\r\n\0\x1b]/g, "").trim();
+  return clean.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+// ----------------------------------------------------
+// Authentication, PIN, & Session Management
+// ----------------------------------------------------
+interface AuthSession {
+  profileId: string;
+  isAdmin: boolean;
+  createdAt: number;
+  expiresAt: number;
+}
+
+const activeSessions = new Map<string, AuthSession>();
+
+export function hashPin(pin: string): string {
+  return crypto.createHash("sha256").update(`inaetia_pin_salt_${pin.trim()}`).digest("hex");
+}
+
+export function createSession(profileId: string, isAdmin: boolean = false): string {
+  const token = crypto.randomBytes(32).toString("hex");
+  activeSessions.set(token, {
+    profileId,
+    isAdmin,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+  });
+  return token;
+}
+
+export function getSessionFromReq(req: express.Request): AuthSession | null {
+  const headerToken = (req.headers["x-profile-token"] as string) || "";
+  const authHeader = req.headers["authorization"] ? (req.headers["authorization"] as string).replace(/^Bearer\s+/i, "").trim() : "";
+  const queryToken = (req.query.token as string) || "";
+
+  const token = headerToken || authHeader || queryToken;
+  if (!token) return null;
+
+  const session = activeSessions.get(token);
+  if (!session) return null;
+
+  if (Date.now() > session.expiresAt) {
+    activeSessions.delete(token);
+    return null;
+  }
+
+  return session;
+}
+
+export function sanitizeProfile(profile: any) {
+  if (!profile) return profile;
+  const { pin, pinHash, ...safe } = profile;
+  return {
+    ...safe,
+    hasPin: Boolean(pin || pinHash),
+    isAdmin: Boolean(profile.isAdmin),
+  };
+}
+
+export function sanitizeMovieForClient(movie: any) {
+  if (!movie) return movie;
+  const { filepath, ...safeMovie } = movie;
+  return safeMovie;
+}
+
+export function sanitizeTrackForClient(track: any) {
+  if (!track) return track;
+  const { filepath, ...safeTrack } = track;
+  return safeTrack;
 }
 
 // Helper to parse comma-separated paths or fall back to default
@@ -275,12 +404,22 @@ function loadPersistentCache() {
           console.log("💾 Metadata cache file exists but is empty. Setting hasPerformedInitialScan to false to trigger a fresh scan.");
         }
         
-        // Re-populate indices
+        // Re-populate indices with verified existing files
         if (parsed.moviesIndexList) {
-          parsed.moviesIndexList.forEach(([id, file]: [string, string]) => moviesIndex.set(id, file));
+          moviesIndex.clear();
+          parsed.moviesIndexList.forEach(([id, file]: [string, string]) => {
+            if (fs.existsSync(file)) {
+              moviesIndex.set(id, file);
+            }
+          });
         }
         if (parsed.musicIndexList) {
-          parsed.musicIndexList.forEach(([id, file]: [string, string]) => musicIndex.set(id, file));
+          musicIndex.clear();
+          parsed.musicIndexList.forEach(([id, file]: [string, string]) => {
+            if (fs.existsSync(file)) {
+              musicIndex.set(id, file);
+            }
+          });
         }
         repopulateShowsFoldersIndex();
         console.log(`💾 Metadata cache loaded successfully! Movies: ${moviesCache.length}, Tracks: ${musicCache.length}`);
@@ -361,8 +500,9 @@ function processFfprobeQueue() {
   if (!task) return;
 
   activeFfprobes++;
-  exec(
-    `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${task.filepath}"`,
+  execFile(
+    "ffprobe",
+    ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", task.filepath],
     (err, stdout) => {
       activeFfprobes--;
       
@@ -545,6 +685,9 @@ async function scanAllLibraries() {
     if (m && m.filepath) existingMusicMap.set(m.filepath, m);
   });
 
+  const scannedMoviesIndex = new Map<string, string>();
+  const scannedMusicIndex = new Map<string, string>();
+
   // 1. Scan Movies, TV Shows, and Other Videos
   const videoExts = [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
   const videoScannedFiles: ScannedFile[] = [];
@@ -615,7 +758,7 @@ async function scanAllLibraries() {
       
       // MD5 of full filepath
       const id = crypto.createHash("md5").update(file).digest("hex");
-      moviesIndex.set(id, file);
+      scannedMoviesIndex.set(id, file);
 
       const stat = fs.statSync(file);
 
@@ -633,7 +776,7 @@ async function scanAllLibraries() {
       const cachedItem = existingMoviesMap.get(relativePath);
       if (cachedItem && cachedItem.size === stat.size && cachedItem.nfoMtime === nfoMtime) {
         // Essential: make sure movie is indexable for stream and artwork retrieval
-        moviesIndex.set(cachedItem.id, file);
+        scannedMoviesIndex.set(cachedItem.id, file);
         
         // Dynamically refresh local artwork status to catch newly added or changed sidecar images
         const artwork = findArtwork(file);
@@ -861,6 +1004,8 @@ async function scanAllLibraries() {
 
   const resolvedMovies = await Promise.all(moviePromises);
   moviesCache = resolvedMovies.filter((item): item is NonNullable<typeof item> => item !== null);
+  moviesIndex.clear();
+  scannedMoviesIndex.forEach((filepath, id) => moviesIndex.set(id, filepath));
   repopulateShowsFoldersIndex();
 
   // 2. Scan Music
@@ -896,7 +1041,7 @@ async function scanAllLibraries() {
       const rawBase = path.basename(file, ext);
       
       const id = crypto.createHash("md5").update(file).digest("hex");
-      musicIndex.set(id, file);
+      scannedMusicIndex.set(id, file);
 
       const stat = fs.statSync(file);
       let duration = 120;
@@ -979,6 +1124,8 @@ async function scanAllLibraries() {
 
   const resolvedMusic = await Promise.all(musicPromises);
   musicCache = resolvedMusic.filter((item): item is NonNullable<typeof item> => item !== null);
+  musicIndex.clear();
+  scannedMusicIndex.forEach((filepath, id) => musicIndex.set(id, filepath));
 
   cachesLastUpdated = Date.now();
   hasPerformedInitialScan = true;
@@ -1097,12 +1244,13 @@ function saveProfiles(data: any) {
 // GET /api/profiles
 app.get("/api/profiles", (req, res) => {
   const data = loadProfiles();
-  res.json(data.profiles || []);
+  const safeProfiles = (data.profiles || []).map(sanitizeProfile);
+  res.json(safeProfiles);
 });
 
 // POST /api/profiles
 app.post("/api/profiles", (req, res) => {
-  const { name, color, avatar } = req.body;
+  const { name, color, avatar, pin, isAdmin } = req.body;
   if (!name || !color) {
     return res.status(400).json({ error: "Name and color are required" });
   }
@@ -1110,11 +1258,23 @@ app.post("/api/profiles", (req, res) => {
   if (!data.profiles) data.profiles = [];
 
   const profileAvatar = avatar || (name.trim().charAt(0).toUpperCase() || "?");
+  const isFirstProfile = data.profiles.length === 0;
+
+  let pinHash: string | undefined = undefined;
+  if (pin && typeof pin === "string" && pin.trim().length > 0) {
+    if (!/^\d{4,6}$/.test(pin.trim())) {
+      return res.status(400).json({ error: "PIN must be 4 to 6 numeric digits" });
+    }
+    pinHash = hashPin(pin.trim());
+  }
+
   const newProfile = {
     id: crypto.randomUUID(),
     name: name.trim(),
     avatar: profileAvatar,
     color,
+    pinHash,
+    isAdmin: isFirstProfile ? true : Boolean(isAdmin),
     createdAt: new Date().toISOString(),
     watchHistory: {},
     preferences: {
@@ -1125,22 +1285,120 @@ app.post("/api/profiles", (req, res) => {
 
   data.profiles.push(newProfile);
   saveProfiles(data);
-  res.json(newProfile);
+
+  const token = createSession(newProfile.id, Boolean(newProfile.isAdmin));
+  res.json({ ...sanitizeProfile(newProfile), token });
+});
+
+// POST /api/profiles/:id/verify-pin
+app.post("/api/profiles/:id/verify-pin", (req, res) => {
+  const { id } = req.params;
+  const { pin } = req.body || {};
+  const data = loadProfiles();
+  const profile = (data.profiles || []).find((p: any) => p.id === id);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  const storedHash = profile.pinHash || (profile.pin ? hashPin(profile.pin) : "");
+  if (!storedHash) {
+    const token = createSession(profile.id, Boolean(profile.isAdmin));
+    return res.json({ success: true, token, profile: sanitizeProfile(profile) });
+  }
+
+  if (!pin || typeof pin !== "string") {
+    return res.status(400).json({ error: "PIN is required" });
+  }
+
+  if (hashPin(pin) !== storedHash) {
+    return res.status(401).json({ error: "Incorrect PIN" });
+  }
+
+  const token = createSession(profile.id, Boolean(profile.isAdmin));
+  return res.json({ success: true, token, profile: sanitizeProfile(profile) });
+});
+
+// POST /api/profiles/:id/session
+app.post("/api/profiles/:id/session", (req, res) => {
+  const { id } = req.params;
+  const data = loadProfiles();
+  const profile = (data.profiles || []).find((p: any) => p.id === id);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  const hasPin = Boolean(profile.pin || profile.pinHash);
+  if (hasPin) {
+    return res.status(401).json({ error: "PIN required for this profile", hasPin: true });
+  }
+
+  const token = createSession(profile.id, Boolean(profile.isAdmin));
+  return res.json({ success: true, token, profile: sanitizeProfile(profile) });
+});
+
+// PUT /api/profiles/:id/pin
+app.put("/api/profiles/:id/pin", (req, res) => {
+  const { id } = req.params;
+  const { currentPin, newPin } = req.body || {};
+  const data = loadProfiles();
+  const profile = (data.profiles || []).find((p: any) => p.id === id);
+
+  if (!profile) {
+    return res.status(404).json({ error: "Profile not found" });
+  }
+
+  const storedHash = profile.pinHash || (profile.pin ? hashPin(profile.pin) : "");
+  const session = getSessionFromReq(req);
+  const isAuthorizedBySession = session && (session.profileId === id || session.isAdmin);
+
+  if (storedHash && !isAuthorizedBySession) {
+    if (!currentPin || hashPin(currentPin) !== storedHash) {
+      return res.status(401).json({ error: "Current PIN is incorrect" });
+    }
+  }
+
+  if (newPin && typeof newPin === "string" && newPin.trim().length > 0) {
+    if (!/^\d{4,6}$/.test(newPin.trim())) {
+      return res.status(400).json({ error: "PIN must be 4 to 6 numeric digits" });
+    }
+    profile.pinHash = hashPin(newPin.trim());
+    delete profile.pin;
+  } else {
+    // Remove PIN
+    delete profile.pin;
+    delete profile.pinHash;
+  }
+
+  saveProfiles(data);
+  const token = createSession(profile.id, Boolean(profile.isAdmin));
+  return res.json({ success: true, token, profile: sanitizeProfile(profile) });
 });
 
 // DELETE /api/profiles/:id
 app.delete("/api/profiles/:id", (req, res) => {
   const id = req.params.id;
+  const { pin } = req.body || {};
   const data = loadProfiles();
   if (!data.profiles) data.profiles = [];
 
-  const initialCount = data.profiles.length;
-  data.profiles = data.profiles.filter((p: any) => p.id !== id);
-
-  if (data.profiles.length === initialCount) {
+  const targetProfile = data.profiles.find((p: any) => p.id === id);
+  if (!targetProfile) {
     return res.status(404).json({ error: "Profile not found" });
   }
 
+  const session = getSessionFromReq(req);
+  const isAuthorized = session && (session.profileId === id || session.isAdmin);
+  const storedHash = targetProfile.pinHash || (targetProfile.pin ? hashPin(targetProfile.pin) : "");
+
+  if (storedHash && !isAuthorized) {
+    if (!pin || hashPin(pin) !== storedHash) {
+      return res.status(401).json({ error: "PIN verification required to delete this profile" });
+    }
+  }
+
+  data.profiles = data.profiles.filter((p: any) => p.id !== id);
   saveProfiles(data);
   res.json({ success: true, message: "Profile deleted successfully" });
 });
@@ -1158,11 +1416,12 @@ app.get("/api/profiles/:id/history", async (req, res) => {
 
   const historyItems = Object.entries(profile.watchHistory || {}).map(([movieId, record]: [string, any]) => {
     const movie = moviesCache.find((m) => m.id === movieId);
+    const safeMovie = movie ? sanitizeMovieForClient(movie) : null;
     return {
       ...record,
       movieId,
-      movie: movie || null,
-      ...(movie || {})
+      movie: safeMovie,
+      ...(safeMovie || {})
     };
   });
 
@@ -1185,6 +1444,12 @@ app.post("/api/profiles/:id/history", (req, res) => {
 
   if (!profile) {
     return res.status(404).json({ error: "Profile not found" });
+  }
+
+  // Validate session if profiles exist
+  const session = getSessionFromReq(req);
+  if (data.profiles.length > 0 && session && session.profileId !== id && !session.isAdmin) {
+    return res.status(403).json({ error: "Unauthorized to update another profile's history" });
   }
 
   if (!profile.watchHistory) {
@@ -1231,6 +1496,15 @@ app.delete("/api/profiles/:id/history", (req, res) => {
     return res.status(404).json({ error: "Profile not found" });
   }
 
+  const session = getSessionFromReq(req);
+  const storedHash = profile.pinHash || (profile.pin ? hashPin(profile.pin) : "");
+  if (storedHash && (!session || (session.profileId !== id && !session.isAdmin))) {
+    const { pin } = req.body || {};
+    if (!pin || hashPin(pin) !== storedHash) {
+      return res.status(401).json({ error: "Authentication or PIN verification required to clear history" });
+    }
+  }
+
   profile.watchHistory = {};
   saveProfiles(data);
   return res.json({ success: true, message: "Entire watch history cleared" });
@@ -1244,6 +1518,15 @@ app.delete("/api/profiles/:id/history/:movieId", (req, res) => {
 
   if (!profile) {
     return res.status(404).json({ error: "Profile not found" });
+  }
+
+  const session = getSessionFromReq(req);
+  const storedHash = profile.pinHash || (profile.pin ? hashPin(profile.pin) : "");
+  if (storedHash && (!session || (session.profileId !== id && !session.isAdmin))) {
+    const { pin } = req.body || {};
+    if (!pin || hashPin(pin) !== storedHash) {
+      return res.status(401).json({ error: "Authentication or PIN verification required" });
+    }
   }
 
   if (profile.watchHistory && profile.watchHistory[movieId]) {
@@ -1273,11 +1556,12 @@ app.get("/api/profiles/:id/continue", async (req, res) => {
     })
     .map(([movieId, record]: [string, any]) => {
       const movie = moviesCache.find((m) => m.id === movieId);
+      const safeMovie = movie ? sanitizeMovieForClient(movie) : null;
       return {
         ...record,
         movieId,
-        movie: movie || null,
-        ...(movie || {})
+        movie: safeMovie,
+        ...(safeMovie || {})
       };
     })
     .filter((item) => item.movie !== null); // Only return valid scanned movies
@@ -1305,7 +1589,13 @@ app.get("/api/profiles/:id/recommendations", async (req, res) => {
   const isStale = !cached || !cached.updatedAt || (Date.now() - new Date(cached.updatedAt).getTime() > 12 * 60 * 60 * 1000);
 
   if (!forceRefresh && !isStale && cached && cached.recommendations && cached.recommendations.length > 0) {
-    return res.json(cached);
+    return res.json({
+      ...cached,
+      recommendations: cached.recommendations.map((r: any) => ({
+        ...r,
+        movie: sanitizeMovieForClient(r.movie)
+      }))
+    });
   }
 
   try {
@@ -1319,11 +1609,23 @@ app.get("/api/profiles/:id/recommendations", async (req, res) => {
     });
 
     saveProfiles(data);
-    return res.json(recData);
+    return res.json({
+      ...recData,
+      recommendations: recData.recommendations.map((r: any) => ({
+        ...r,
+        movie: sanitizeMovieForClient(r.movie)
+      }))
+    });
   } catch (err: any) {
     console.error(`Error generating recommendations for profile ${id}:`, err);
     if (cached && cached.recommendations) {
-      return res.json(cached);
+      return res.json({
+        ...cached,
+        recommendations: cached.recommendations.map((r: any) => ({
+          ...r,
+          movie: sanitizeMovieForClient(r.movie)
+        }))
+      });
     }
     return res.status(500).json({ error: "Failed to generate recommendations", details: err.message });
   }
@@ -1337,7 +1639,8 @@ app.get("/api/profiles/:id/recommendations", async (req, res) => {
 app.get("/api/movies", async (req, res) => {
   try {
     await checkCache();
-    res.json(moviesCache);
+    const safeMovies = moviesCache.map(sanitizeMovieForClient);
+    res.json(safeMovies);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to scan movies", details: err.message });
   }
@@ -1926,8 +2229,20 @@ app.get("/api/thumbnail/:id", (req, res) => {
   const seekStr = seekSeconds.toString();
 
   // Generate thumbnail, size 320x180
-  exec(
-    `ffmpeg -y -ss ${seekStr} -i "${filepath}" -vframes 1 -vf "scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2" "${thumbPath}"`,
+  execFile(
+    "ffmpeg",
+    [
+      "-y",
+      "-ss",
+      seekStr,
+      "-i",
+      filepath,
+      "-vframes",
+      "1",
+      "-vf",
+      "scale=320:180:force_original_aspect_ratio=decrease,pad=320:180:(ow-iw)/2:(oh-ih)/2",
+      thumbPath,
+    ],
     (err) => {
       if (err) {
         console.error(`Thumbnail generation failed for ID ${id}:`, err.message);
@@ -1950,7 +2265,8 @@ app.get("/api/thumbnail/:id", (req, res) => {
 app.get("/api/music", async (req, res) => {
   try {
     await checkCache();
-    res.json(musicCache);
+    const safeMusic = musicCache.map(sanitizeTrackForClient);
+    res.json(safeMusic);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to scan music", details: err.message });
   }
@@ -2907,8 +3223,8 @@ app.get("/api/search", async (req, res) => {
     );
 
     res.json({
-      movies: filteredMovies,
-      music: filteredMusic,
+      movies: filteredMovies.map(sanitizeMovieForClient),
+      music: filteredMusic.map(sanitizeTrackForClient),
     });
   } catch (err: any) {
     res.status(500).json({ error: "Search query failed", details: err.message });
@@ -2924,7 +3240,7 @@ app.get("/api/status", async (req, res) => {
     const storagePath = hasMntStorage ? "/mnt/storage" : ".";
     
     // Execute df with -P for standard POSIX output (avoid split lines) and a short timeout to prevent blocking on network errors/stale mounts
-    exec(`df -P -k "${storagePath}"`, { timeout: 1500, killSignal: "SIGKILL" }, (err, stdout) => {
+    execFile("df", ["-P", "-k", storagePath], { timeout: 1500, killSignal: "SIGKILL" }, (err, stdout) => {
       let total = 4000 * 1024 * 1024 * 1024; // Mock standard 4TB cinema drive
       let free = 1800 * 1024 * 1024 * 1024;
       let used = total - free;
@@ -2976,6 +3292,16 @@ app.get("/api/status", async (req, res) => {
 // Force library rescan
 app.post("/api/rescan", async (req, res) => {
   try {
+    const data = loadProfiles();
+    const profiles = data.profiles || [];
+    const hasProtectedAdmin = profiles.some((p: any) => p.isAdmin && (p.pin || p.pinHash));
+    if (hasProtectedAdmin) {
+      const session = getSessionFromReq(req);
+      if (!session || !session.isAdmin) {
+        return res.status(401).json({ error: "Admin authentication required to trigger rescan" });
+      }
+    }
+
     await triggerScan();
     res.json({ success: true, movies: moviesCache.length, music: musicCache.length });
   } catch (err: any) {
@@ -2986,6 +3312,16 @@ app.post("/api/rescan", async (req, res) => {
 // Clear thumbnail cache to force smart regeneration
 app.post("/api/thumbnails/clear", async (req, res) => {
   try {
+    const data = loadProfiles();
+    const profiles = data.profiles || [];
+    const hasProtectedAdmin = profiles.some((p: any) => p.isAdmin && (p.pin || p.pinHash));
+    if (hasProtectedAdmin) {
+      const session = getSessionFromReq(req);
+      if (!session || !session.isAdmin) {
+        return res.status(401).json({ error: "Admin authentication required to clear cache" });
+      }
+    }
+
     if (fs.existsSync(thumbsCacheDir)) {
       const files = fs.readdirSync(thumbsCacheDir);
       for (const file of files) {
@@ -3007,7 +3343,7 @@ app.post("/api/thumbnails/clear", async (req, res) => {
 // ==========================================
 
 let ffmpegInstalledCached = false;
-exec("ffmpeg -version", (err) => {
+execFile("ffmpeg", ["-version"], (err) => {
   if (!err) {
     ffmpegInstalledCached = true;
   } else {
@@ -3060,9 +3396,23 @@ app.post("/api/setup/validate-path", (req, res) => {
     return res.status(400).json({ error: "Path is required" });
   }
 
-  const resolvedPath = resolveHome(rawPath);
+  const check = isPathSafe(rawPath);
+  if (!check.safe) {
+    return res.status(400).json({ error: check.reason || "Invalid or restricted path", exists: false, fileCount: 0 });
+  }
+
+  const resolvedPath = check.resolvedPath;
   if (!fs.existsSync(resolvedPath)) {
     return res.json({ exists: false, fileCount: 0 });
+  }
+
+  try {
+    const stat = fs.statSync(resolvedPath);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: "Specified path is not a directory", exists: false, fileCount: 0 });
+    }
+  } catch (e: any) {
+    return res.status(400).json({ error: "Unable to inspect directory", exists: false, fileCount: 0 });
   }
 
   const allowedExts = type === "music" 
@@ -3087,10 +3437,28 @@ app.post("/api/setup/submit", async (req, res) => {
     appName 
   } = req.body;
 
-  const musicPathsArr = Array.isArray(musicPaths) ? musicPaths : (musicPath ? [musicPath] : ["media/Music"]);
-  const moviesPathsArr = Array.isArray(moviesPaths) ? moviesPaths : (videosPath ? [videosPath] : ["media/Videos"]);
-  const tvShowsPathsArr = Array.isArray(tvShowsPaths) ? tvShowsPaths : (videosPath ? [videosPath] : ["media/Videos"]);
-  const otherVideosPathsArr = Array.isArray(otherVideosPaths) ? otherVideosPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+  const rawMusicPaths = Array.isArray(musicPaths) ? musicPaths : (musicPath ? [musicPath] : ["media/Music"]);
+  const rawMoviesPaths = Array.isArray(moviesPaths) ? moviesPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+  const rawTvShowsPaths = Array.isArray(tvShowsPaths) ? tvShowsPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+  const rawOtherVideosPaths = Array.isArray(otherVideosPaths) ? otherVideosPaths : (videosPath ? [videosPath] : ["media/Videos"]);
+
+  // Validate all paths against system traversal / restricted system roots
+  const pathsToCheck = [...rawMusicPaths, ...rawMoviesPaths, ...rawTvShowsPaths, ...rawOtherVideosPaths];
+  if (musicVideosPath) pathsToCheck.push(musicVideosPath);
+
+  for (const p of pathsToCheck) {
+    if (p) {
+      const check = isPathSafe(p);
+      if (!check.safe) {
+        return res.status(400).json({ error: `Path "${p}" is unsafe: ${check.reason}` });
+      }
+    }
+  }
+
+  const musicPathsArr = rawMusicPaths.map(p => sanitizeEnvVal(p));
+  const moviesPathsArr = rawMoviesPaths.map(p => sanitizeEnvVal(p));
+  const tvShowsPathsArr = rawTvShowsPaths.map(p => sanitizeEnvVal(p));
+  const otherVideosPathsArr = rawOtherVideosPaths.map(p => sanitizeEnvVal(p));
 
   const musicPathsStr = musicPathsArr.join(",");
   const moviesPathsStr = moviesPathsArr.join(",");
@@ -3099,6 +3467,8 @@ app.post("/api/setup/submit", async (req, res) => {
 
   const finalVideosPath = moviesPathsArr[0] || otherVideosPathsArr[0] || "media/Videos";
   const finalMusicPath = musicPathsArr[0] || "media/Music";
+  const cleanAppName = sanitizeEnvVal(appName || "Inaetia Studios");
+  const cleanThemeColor = /^#[0-9A-Fa-f]{6}$/.test(themeColor) ? themeColor : "#F5A623";
 
   let maxConcurrentFfprobe = 5;
   let rescanInterval = 30;
@@ -3115,12 +3485,12 @@ app.post("/api/setup/submit", async (req, res) => {
 
   const envContent = `# Inaetia Studios - Self-Hosted Media Server Configuration
 SETUP_COMPLETE=true
-APP_NAME="${appName || "Inaetia Studios"}"
+APP_NAME="${cleanAppName}"
 PORT=${process.env.PORT || 3000}
 HOST=${process.env.HOST || "0.0.0.0"}
 VIDEOS_PATH="${finalVideosPath}"
 MUSIC_PATH="${finalMusicPath}"
-MUSIC_VIDEOS_PATH="${musicVideosPath || ""}"
+MUSIC_VIDEOS_PATH="${sanitizeEnvVal(musicVideosPath || "")}"
 MUSIC_PATHS="${musicPathsStr}"
 MOVIES_PATHS="${moviesPathsStr}"
 TV_SHOWS_PATHS="${tvShowsPathsStr}"
@@ -3132,19 +3502,19 @@ RESCAN_INTERVAL_MINUTES=${rescanInterval}
 ENABLE_LIVE_TV=true
 ENABLE_RADIO=true
 ENABLE_SAFARI_REMUX=true
-THEME_COLOR="${themeColor || "#F5A623"}"
+THEME_COLOR="${cleanThemeColor}"
 SERVER_IP="${getServerIpAddress()}"
 `;
 
   try {
     fs.writeFileSync(path.join(process.cwd(), ".env"), envContent, "utf-8");
-    console.log("📝 .env file written successfully!");
+    console.log("📝 .env file written securely!");
 
     process.env.SETUP_COMPLETE = "true";
-    process.env.APP_NAME = appName || "Inaetia Studios";
+    process.env.APP_NAME = cleanAppName;
     process.env.VIDEOS_PATH = finalVideosPath;
     process.env.MUSIC_PATH = finalMusicPath;
-    process.env.MUSIC_VIDEOS_PATH = musicVideosPath || "";
+    process.env.MUSIC_VIDEOS_PATH = sanitizeEnvVal(musicVideosPath || "");
     process.env.MUSIC_PATHS = musicPathsStr;
     process.env.MOVIES_PATHS = moviesPathsStr;
     process.env.TV_SHOWS_PATHS = tvShowsPathsStr;
@@ -3153,7 +3523,7 @@ SERVER_IP="${getServerIpAddress()}"
     process.env.PROFILES_PATH = "~/.inaetia/profiles";
     process.env.MAX_CONCURRENT_FFPROBE = maxConcurrentFfprobe.toString();
     process.env.RESCAN_INTERVAL_MINUTES = rescanInterval.toString();
-    process.env.THEME_COLOR = themeColor || "#F5A623";
+    process.env.THEME_COLOR = cleanThemeColor;
 
     reinitializePathsAndSettings();
 
@@ -3172,6 +3542,16 @@ SERVER_IP="${getServerIpAddress()}"
 });
 
 app.post("/api/settings/save-directories", async (req, res) => {
+  const data = loadProfiles();
+  const profiles = data.profiles || [];
+  const hasProtectedAdmin = profiles.some((p: any) => p.isAdmin && (p.pin || p.pinHash));
+  if (hasProtectedAdmin) {
+    const session = getSessionFromReq(req);
+    if (!session || !session.isAdmin) {
+      return res.status(401).json({ error: "Admin authentication required to change library directories" });
+    }
+  }
+
   const { 
     musicPaths,
     moviesPaths,
@@ -3183,14 +3563,31 @@ app.post("/api/settings/save-directories", async (req, res) => {
     return res.status(400).json({ error: "All directory path arrays are required" });
   }
 
-  const musicPathsStr = Array.isArray(musicPaths) ? musicPaths.join(",") : musicPaths;
-  const moviesPathsStr = Array.isArray(moviesPaths) ? moviesPaths.join(",") : moviesPaths;
-  const tvShowsPathsStr = Array.isArray(tvShowsPaths) ? tvShowsPaths.join(",") : tvShowsPaths;
-  const otherVideosPathsStr = Array.isArray(otherVideosPaths) ? otherVideosPaths.join(",") : otherVideosPaths;
+  const rawMusic = Array.isArray(musicPaths) ? musicPaths : [musicPaths];
+  const rawMovies = Array.isArray(moviesPaths) ? moviesPaths : [moviesPaths];
+  const rawTvShows = Array.isArray(tvShowsPaths) ? tvShowsPaths : [tvShowsPaths];
+  const rawOtherVideos = Array.isArray(otherVideosPaths) ? otherVideosPaths : [otherVideosPaths];
 
-  const musicPathsArr = Array.isArray(musicPaths) ? musicPaths : [musicPaths];
-  const moviesPathsArr = Array.isArray(moviesPaths) ? moviesPaths : [moviesPaths];
-  const otherVideosPathsArr = Array.isArray(otherVideosPaths) ? otherVideosPaths : [otherVideosPaths];
+  // Validate all paths for security
+  const allPaths = [...rawMusic, ...rawMovies, ...rawTvShows, ...rawOtherVideos];
+  for (const p of allPaths) {
+    if (p) {
+      const check = isPathSafe(p);
+      if (!check.safe) {
+        return res.status(400).json({ error: `Path "${p}" is unsafe: ${check.reason}` });
+      }
+    }
+  }
+
+  const musicPathsArr = rawMusic.map(p => sanitizeEnvVal(p));
+  const moviesPathsArr = rawMovies.map(p => sanitizeEnvVal(p));
+  const tvShowsPathsArr = rawTvShows.map(p => sanitizeEnvVal(p));
+  const otherVideosPathsArr = rawOtherVideos.map(p => sanitizeEnvVal(p));
+
+  const musicPathsStr = musicPathsArr.join(",");
+  const moviesPathsStr = moviesPathsArr.join(",");
+  const tvShowsPathsStr = tvShowsPathsArr.join(",");
+  const otherVideosPathsStr = otherVideosPathsArr.join(",");
 
   // Update .env file content
   try {
@@ -3200,13 +3597,17 @@ app.post("/api/settings/save-directories", async (req, res) => {
       envContent = fs.readFileSync(envPath, "utf-8");
     }
 
-    // Function to replace or append environment variables
+    // Function to replace or append environment variables with strict key and value sanitation
     const updateEnvVar = (content: string, key: string, value: string): string => {
+      if (!/^[A-Z0-9_]+$/.test(key)) {
+        throw new Error("Invalid env key name");
+      }
+      const cleanVal = sanitizeEnvVal(value);
       const regex = new RegExp(`^${key}=.*$`, "m");
       if (regex.test(content)) {
-        return content.replace(regex, `${key}="${value}"`);
+        return content.replace(regex, `${key}="${cleanVal}"`);
       } else {
-        return content + `\n${key}="${value}"`;
+        return content + `\n${key}="${cleanVal}"`;
       }
     };
 

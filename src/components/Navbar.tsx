@@ -11,6 +11,7 @@ export default function Navbar() {
     setSearchQuery,
     currentProfile,
     setCurrentProfile,
+    logoutProfile,
     clearProfileHistory,
   } = useApp();
 
@@ -224,13 +225,13 @@ export default function Navbar() {
                     
                     <button
                       onClick={() => {
-                        setCurrentProfile(null);
+                        logoutProfile();
                         setShowDropdown(false);
                       }}
                       className="w-full text-left px-3 py-2 hover:bg-white/5 hover:text-white rounded-lg transition-colors flex items-center gap-2"
                       id="btn-dropdown-switch"
                     >
-                      <Users className="w-4 h-4 text-cinema-amber" /> Switch Profile
+                      <Users className="w-4 h-4 text-cinema-amber" /> Switch / Lock Profile
                     </button>
 
                     <button

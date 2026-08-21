@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { exec, spawn, ChildProcess } from "child_process";
+import { execFile, spawn, ChildProcess } from "child_process";
 
 // Helper to resolve ~ in paths
 function resolveHome(filepath: string): string {
@@ -28,6 +28,18 @@ export const HLS_MAX_CACHE_SIZE_BYTES = parseInt(
 
 // Eviction check interval (default 15 minutes)
 export const HLS_EVICTION_INTERVAL_MS = 15 * 60 * 1000;
+
+// Maximum concurrent video transcoding processes (defaults to 2 for low-power boxes/Raspberry Pi)
+export const MAX_CONCURRENT_HLS_TRANSCODES = parseInt(
+  process.env.MAX_CONCURRENT_HLS_TRANSCODES || "2",
+  10
+);
+
+// Idle transcode inactivity timeout (60 seconds without segment/playlist requests)
+export const HLS_TRANSCODE_INACTIVITY_MS = parseInt(
+  process.env.HLS_TRANSCODE_INACTIVITY_MS || "60000",
+  10
+);
 
 export interface ProbeResult {
   videoCodec: string;
@@ -65,6 +77,16 @@ export interface TranscodeJob {
 // Active jobs and probe cache in memory
 const activeJobs = new Map<string, TranscodeJob>();
 const probeCache = new Map<string, ProbeResult>();
+
+export function getActiveTranscodes(): TranscodeJob[] {
+  const active: TranscodeJob[] = [];
+  for (const job of activeJobs.values()) {
+    if (job.status === "transcoding" && job.process) {
+      active.push(job);
+    }
+  }
+  return active;
+}
 
 // Ensure cache root directory exists
 function ensureHlsCacheDir(fileId?: string): string {
@@ -104,9 +126,11 @@ export async function probeMediaFile(fileId: string, filepath: string): Promise<
   }
 
   return new Promise((resolve) => {
-    const cmd = `ffprobe -v error -show_format -show_streams -of json "${filepath}"`;
-    exec(cmd, (err, stdout) => {
-      let videoCodec = "unknown";
+    execFile(
+      "ffprobe",
+      ["-v", "error", "-show_format", "-show_streams", "-of", "json", filepath],
+      (err, stdout) => {
+        let videoCodec = "unknown";
       let audioCodec = "unknown";
       let audioChannels = 2;
       let duration = 0;
@@ -357,7 +381,29 @@ export async function startOrGetHlsTranscode(
     playlistPath
   );
 
-  console.log(`[HLS Job] Spawning FFmpeg for ${fileId} at seek ${seekOffset}s...`);
+  // Enforce concurrency limit on active FFmpeg video transcode processes
+  const runningJobs = getActiveTranscodes().filter((j) => j.fileId !== fileId);
+  if (runningJobs.length >= MAX_CONCURRENT_HLS_TRANSCODES) {
+    // Sort by lastAccessed ascending (oldest/least recently accessed first)
+    runningJobs.sort((a, b) => a.lastAccessed - b.lastAccessed);
+    const toKillCount = runningJobs.length - MAX_CONCURRENT_HLS_TRANSCODES + 1;
+    const jobsToKill = runningJobs.slice(0, toKillCount);
+    for (const jobToKill of jobsToKill) {
+      console.log(
+        `[HLS Concurrency] Killing LRU active transcode job for ${jobToKill.fileId} to stay within limit (${MAX_CONCURRENT_HLS_TRANSCODES})`
+      );
+      try {
+        if (jobToKill.process) {
+          jobToKill.process.kill("SIGKILL");
+        }
+      } catch (_) {}
+      jobToKill.status = "completed";
+      jobToKill.process = null;
+      activeJobs.delete(jobToKill.fileId);
+    }
+  }
+
+  console.log(`[HLS Job] Spawning FFmpeg for ${fileId} at seek ${seekOffset}s (Active: ${runningJobs.length + 1}/${MAX_CONCURRENT_HLS_TRANSCODES})...`);
 
   // Clean up existing playlist if starting from offset 0
   if (seekOffset === 0) {
@@ -481,6 +527,11 @@ const lastAccessedMap = new Map<string, number>();
 export function updateLastAccessed(fileId: string): void {
   const now = Date.now();
   lastAccessedMap.set(fileId, now);
+
+  const job = activeJobs.get(fileId);
+  if (job) {
+    job.lastAccessed = now;
+  }
 
   const fileCacheDir = path.join(HLS_CACHE_ROOT, fileId);
   const metaPath = path.join(fileCacheDir, "meta.json");
@@ -615,3 +666,31 @@ export function runHlsCacheEviction(): void {
 
 // Periodically run LRU Cache Eviction
 setInterval(runHlsCacheEviction, HLS_EVICTION_INTERVAL_MS);
+
+/**
+ * Automatically terminates idle transcode processes if no client has requested segments recently.
+ */
+export function reapInactiveTranscodes(): void {
+  const now = Date.now();
+  for (const [id, job] of activeJobs.entries()) {
+    if (job.status === "transcoding" && job.process) {
+      if (now - job.lastAccessed > HLS_TRANSCODE_INACTIVITY_MS) {
+        console.log(
+          `[HLS Reaper] Terminating idle transcode process for ${id} (inactive for ${Math.round(
+            (now - job.lastAccessed) / 1000
+          )}s)`
+        );
+        try {
+          job.process.kill("SIGKILL");
+        } catch (_) {}
+        job.status = "completed";
+        job.process = null;
+        activeJobs.delete(id);
+      }
+    }
+  }
+}
+
+// Periodically check and clean up inactive transcode processes (every 10 seconds)
+setInterval(reapInactiveTranscodes, 10000);
+

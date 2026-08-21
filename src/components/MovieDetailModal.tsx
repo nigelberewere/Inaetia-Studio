@@ -16,7 +16,6 @@ interface MovieDetailModalProps {
 export default function MovieDetailModal({ movie, onClose }: MovieDetailModalProps) {
   const { movies, setCurrentVideo, continueWatching } = useApp();
   const [showTechDetails, setShowTechDetails] = useState(false);
-  const [showAdvancedPath, setShowAdvancedPath] = useState(false);
 
   // Calculate progress
   const watchRecord = continueWatching.find((item) => item.movieId === movie.id);
@@ -242,29 +241,6 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                     <div><span className="text-cinema-muted">Subtitles Available:</span> <span className="text-white font-medium">{movie.hasSubtitles ? "Yes (.srt/.vtt)" : "None"}</span></div>
                     <div><span className="text-cinema-muted">Metadata Engine:</span> <span className="text-white font-medium uppercase">{movie.metadataSource || "TMM NFO Parser"}</span></div>
                   </div>
-
-                  {/* Advanced Debug Info (Gated) */}
-                  {showAdvancedPath ? (
-                    <div className="pt-2 border-t border-white/10 space-y-1 font-mono text-[10px] animate-fade-in">
-                      <div><span className="text-cinema-muted">Internal File ID:</span> <span className="text-white select-all">{movie.id}</span></div>
-                      <div><span className="text-cinema-muted">Server Path:</span> <span className="text-white break-all">{movie.filepath}</span></div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedPath(false)}
-                        className="text-[10px] text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
-                      >
-                        Hide Debug Path & ID
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowAdvancedPath(true)}
-                      className="text-[10px] text-cinema-muted hover:text-cinema-amber hover:underline pt-1 block cursor-pointer font-sans"
-                    >
-                      Show Advanced Debug Path & Internal ID
-                    </button>
-                  )}
                 </div>
               )}
             </div>
