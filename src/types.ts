@@ -89,6 +89,7 @@ export interface ServerStatus {
   moviesPaths?: string;
   tvShowsPaths?: string;
   otherVideosPaths?: string;
+  excludePaths?: string;
   appName?: string;
   port?: number;
 }

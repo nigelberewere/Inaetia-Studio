@@ -49,6 +49,7 @@ export function getPathsConfig() {
   const targetMusicVideosDir = MUSIC_VIDEOS_PATH && fs.existsSync(resolveHome(MUSIC_VIDEOS_PATH)) ? resolveHome(MUSIC_VIDEOS_PATH) : undefined;
   const targetPicturesDir = PICTURES_PATH && fs.existsSync(resolveHome(PICTURES_PATH)) ? resolveHome(PICTURES_PATH) : path.join(process.cwd(), "media/Pictures");
   const thumbsCacheDir = resolveHome(THUMBNAILS_CACHE_PATH);
+  const EXCLUDE_PATHS = process.env.EXCLUDE_PATHS || "";
 
   const MAX_CONCURRENT_FFPROBES = parseInt(process.env.MAX_CONCURRENT_FFPROBE || "3", 10);
   const RESCAN_INTERVAL_MINUTES = parseInt(process.env.RESCAN_INTERVAL_MINUTES || "30", 10);
@@ -60,6 +61,7 @@ export function getPathsConfig() {
     MUSIC_PATH,
     MUSIC_VIDEOS_PATH,
     PICTURES_PATH,
+    EXCLUDE_PATHS,
     THUMBNAILS_CACHE_PATH,
     PROFILES_DIR,
     PROFILES_PATH,

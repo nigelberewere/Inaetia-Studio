@@ -90,18 +90,42 @@ export function getDuration(filepath: string): Promise<number> {
   });
 }
 
-export function getFilesRecursively(dir: string, allowedExtensions: string[]): string[] {
+export function isPathExcluded(targetPath: string, excludedPaths: string[]): boolean {
+  if (!targetPath || !excludedPaths || excludedPaths.length === 0) return false;
+  const resolvedTarget = path.resolve(resolveHome(targetPath));
+  for (const rawExcluded of excludedPaths) {
+    if (!rawExcluded || !rawExcluded.trim()) continue;
+    const resolvedExcluded = path.resolve(resolveHome(rawExcluded.trim()));
+    if (resolvedTarget === resolvedExcluded || resolvedTarget.startsWith(resolvedExcluded + path.sep)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function getFilesRecursively(dir: string, allowedExtensions: string[], excludedPaths: string[] = []): string[] {
   let results: string[] = [];
   if (!fs.existsSync(dir)) return results;
+
+  const resolvedDir = path.resolve(dir);
+  if (isPathExcluded(resolvedDir, excludedPaths)) {
+    return results;
+  }
 
   try {
     const list = fs.readdirSync(dir);
     list.forEach((file) => {
       if (file.startsWith(".")) return;
       const fullPath = path.join(dir, file);
+      const resolvedFullPath = path.resolve(fullPath);
+
+      if (isPathExcluded(resolvedFullPath, excludedPaths)) {
+        return;
+      }
+
       const stat = fs.statSync(fullPath);
       if (stat && stat.isDirectory()) {
-        results = results.concat(getFilesRecursively(fullPath, allowedExtensions));
+        results = results.concat(getFilesRecursively(fullPath, allowedExtensions, excludedPaths));
       } else {
         const ext = path.extname(file).toLowerCase();
         if (allowedExtensions.includes(ext)) {
@@ -249,6 +273,7 @@ export async function scanAllLibraries() {
   const scannedMoviesIndex = new Map<string, string>();
   const scannedMusicIndex = new Map<string, string>();
 
+  const resolvedExcludedPaths = parsePathsEnv(process.env.EXCLUDE_PATHS, "");
   const videoExts = [".mp4", ".mkv", ".avi", ".mov", ".m4v", ".webm"];
   const videoScannedFiles: ScannedFile[] = [];
 
@@ -256,7 +281,7 @@ export async function scanAllLibraries() {
   resolvedMoviesPaths.forEach((dir) => {
     const resolved = resolveHome(dir);
     if (fs.existsSync(resolved)) {
-      const files = getFilesRecursively(resolved, videoExts);
+      const files = getFilesRecursively(resolved, videoExts, resolvedExcludedPaths);
       files.forEach((f) => {
         videoScannedFiles.push({ file: f, baseDir: resolved, category: "movie" });
       });
@@ -267,7 +292,7 @@ export async function scanAllLibraries() {
   resolvedTvShowsPaths.forEach((dir) => {
     const resolved = resolveHome(dir);
     if (fs.existsSync(resolved)) {
-      const files = getFilesRecursively(resolved, videoExts);
+      const files = getFilesRecursively(resolved, videoExts, resolvedExcludedPaths);
       files.forEach((f) => {
         videoScannedFiles.push({ file: f, baseDir: resolved, category: "episode" });
       });
@@ -278,7 +303,7 @@ export async function scanAllLibraries() {
   resolvedOtherVideosPaths.forEach((dir) => {
     const resolved = resolveHome(dir);
     if (fs.existsSync(resolved)) {
-      const files = getFilesRecursively(resolved, videoExts);
+      const files = getFilesRecursively(resolved, videoExts, resolvedExcludedPaths);
       files.forEach((f) => {
         videoScannedFiles.push({ file: f, baseDir: resolved, category: "video" });
       });
@@ -287,7 +312,7 @@ export async function scanAllLibraries() {
 
   const envMusicVideos = process.env.MUSIC_VIDEOS_PATH;
   if (envMusicVideos && fs.existsSync(envMusicVideos)) {
-    const files = getFilesRecursively(envMusicVideos, videoExts);
+    const files = getFilesRecursively(envMusicVideos, videoExts, resolvedExcludedPaths);
     files.forEach((f) => {
       videoScannedFiles.push({ file: f, baseDir: envMusicVideos, category: "video" });
     });
@@ -536,7 +561,7 @@ export async function scanAllLibraries() {
   resolvedMusicPaths.forEach((dir) => {
     const resolved = resolveHome(dir);
     if (fs.existsSync(resolved)) {
-      const files = getFilesRecursively(resolved, musicExts);
+      const files = getFilesRecursively(resolved, musicExts, resolvedExcludedPaths);
       files.forEach((f) => {
         musicScannedFiles.push({ file: f, baseDir: resolved, category: "music" });
       });

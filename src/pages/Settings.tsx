@@ -4,10 +4,11 @@ import { safeFetch } from "../utils";
 import { 
   Settings as SettingsIcon, Server, HardDrive, RefreshCw, 
   Film, Music, Cpu, ShieldAlert, Wifi, Trash2, Image,
-  HeartPulse, ShieldCheck, Activity, Sparkles, Folder, Save, Check,
-  Radio, Link2, Monitor, Lightbulb
+  HeartPulse, ShieldCheck, Activity, Sparkles, Folder, FolderOpen, Save, Check,
+  Radio, Link2, Monitor, Lightbulb, FolderX
 } from "lucide-react";
 import { InaetiaLogo } from "../components/common/InaetiaLogo";
+import DirectoryPickerModal from "../components/DirectoryPickerModal";
 
 interface LibraryHealth {
   totalItems: number;
@@ -64,11 +65,27 @@ export default function Settings() {
     }
     return ["media/Videos"];
   });
+  const [excludePaths, setExcludePaths] = useState<string[]>(() => {
+    if (status && status.excludePaths) {
+      return status.excludePaths.split(",").filter(Boolean);
+    }
+    return [];
+  });
 
   const [savingDirs, setSavingDirs] = useState(false);
   const [saveDirsSuccess, setSaveDirsSuccess] = useState("");
   const [saveDirsError, setSaveDirsError] = useState("");
   const [hasInitializedDirs, setHasInitializedDirs] = useState(() => !!status);
+
+  // Directory Picker Modal State
+  const [pickerConfig, setPickerConfig] = useState<{
+    isOpen: boolean;
+    categoryTitle: string;
+    categoryType: "music" | "videos" | "all";
+    pathIndex: number;
+    initialPath: string;
+    setPaths: React.Dispatch<React.SetStateAction<string[]>>;
+  } | null>(null);
 
   const fetchHealth = async () => {
     setFetchingHealth(true);
@@ -129,6 +146,12 @@ export default function Settings() {
         setOtherVideosPaths([status.videosPath]);
       } else {
         setOtherVideosPaths(["media/Videos"]);
+      }
+
+      if (status.excludePaths) {
+        setExcludePaths(status.excludePaths.split(",").filter(Boolean));
+      } else {
+        setExcludePaths([]);
       }
       setHasInitializedDirs(true);
     }
@@ -211,6 +234,7 @@ export default function Settings() {
     const activeMovies = moviesPaths.filter(p => p.trim() !== "");
     const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
     const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
+    const activeExcludes = excludePaths.filter(p => p.trim() !== "");
 
     if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0 || activeOther.length === 0) {
       setSaveDirsError("At least one directory path is required for each category.");
@@ -226,7 +250,8 @@ export default function Settings() {
           musicPaths: activeMusic,
           moviesPaths: activeMovies,
           tvShowsPaths: activeTv,
-          otherVideosPaths: activeOther
+          otherVideosPaths: activeOther,
+          excludePaths: activeExcludes
         })
       });
 
@@ -251,7 +276,8 @@ export default function Settings() {
     title: string,
     paths: string[],
     setPaths: React.Dispatch<React.SetStateAction<string[]>>,
-    type: "music" | "videos"
+    type: "music" | "videos" | "all",
+    isOptionalExclude: boolean = false
   ) => {
     const addPath = () => {
       setIsDirty(true);
@@ -260,7 +286,9 @@ export default function Settings() {
 
     const removePath = (index: number) => {
       setIsDirty(true);
-      if (paths.length === 1) {
+      if (isOptionalExclude && paths.length === 1) {
+        setPaths([]);
+      } else if (paths.length === 1) {
         setPaths([""]);
       } else {
         setPaths(paths.filter((_, i) => i !== index));
@@ -274,34 +302,81 @@ export default function Settings() {
       setPaths(updated);
     };
 
+    const openBrowser = (index: number, currentVal: string) => {
+      setPickerConfig({
+        isOpen: true,
+        categoryTitle: title,
+        categoryType: type,
+        pathIndex: index,
+        initialPath: currentVal || (type === "music" ? "media/Music" : "media/Videos"),
+        setPaths,
+      });
+    };
+
     return (
-      <div className="space-y-2 bg-black/15 p-4 rounded-xl border border-cinema-border/55">
+      <div className={`space-y-2 p-4 rounded-xl border ${isOptionalExclude ? 'bg-red-950/10 border-red-500/20 md:col-span-2' : 'bg-black/15 border-cinema-border/55'}`}>
         <div className="flex justify-between items-center">
           <label className="font-bold text-xs uppercase text-zinc-300 tracking-wider flex items-center gap-1.5">
-            <Folder className="w-3.5 h-3.5 text-cinema-amber" /> {title}
+            {isOptionalExclude ? (
+              <FolderX className="w-3.5 h-3.5 text-red-400" />
+            ) : (
+              <Folder className="w-3.5 h-3.5 text-cinema-amber" />
+            )}
+            <span>{title}</span>
+            {isOptionalExclude && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 uppercase tracking-widest font-normal">
+                Optional Exclusion
+              </span>
+            )}
           </label>
           <button
             type="button"
             onClick={addPath}
-            className="text-[10px] text-cinema-amber font-extrabold bg-cinema-amber/10 px-2 py-0.5 rounded-md border border-cinema-amber/20 hover:bg-cinema-amber/20 transition-all cursor-pointer"
+            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+              isOptionalExclude
+                ? 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20'
+                : 'text-cinema-amber bg-cinema-amber/10 border-cinema-amber/20 hover:bg-cinema-amber/20'
+            }`}
           >
-            + Add Path
+            + Add {isOptionalExclude ? 'Exclusion' : 'Path'}
           </button>
         </div>
         <div className="space-y-1.5">
+          {paths.length === 0 && isOptionalExclude && (
+            <p className="text-[11px] text-zinc-600 italic py-1">
+              No excluded folders. All subdirectories in selected media paths will be scanned.
+            </p>
+          )}
           {paths.map((p, idx) => (
             <div key={idx} className="flex gap-2 items-center">
               <input
                 type="text"
-                placeholder={type === "music" ? "e.g. /home/user/Music" : "e.g. /home/user/Videos"}
+                placeholder={isOptionalExclude ? "e.g. /media/Videos/sample-clips or /home/user/Music/.temp" : (type === "music" ? "e.g. /home/user/Music or /mnt/storage/Music" : "e.g. /home/user/Videos or /mnt/storage/Videos")}
                 value={p}
                 onChange={(e) => updatePathValue(idx, e.target.value)}
-                className="flex-1 bg-[#070712] border border-cinema-border/60 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-cinema-amber"
+                className={`flex-1 bg-[#070712] border rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none ${
+                  isOptionalExclude 
+                    ? 'border-red-500/30 focus:border-red-400' 
+                    : 'border-cinema-border/60 focus:border-cinema-amber'
+                }`}
               />
               <button
                 type="button"
+                onClick={() => openBrowser(idx, p)}
+                className={`px-2.5 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0 ${
+                  isOptionalExclude
+                    ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 hover:border-red-500/60'
+                    : 'bg-cinema-amber/10 hover:bg-cinema-amber/20 text-cinema-amber border-cinema-amber/30 hover:border-cinema-amber/60'
+                }`}
+                title="Browse server filesystem and mounted storage"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Browse</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => removePath(idx)}
-                className="text-zinc-500 hover:text-red-400 p-1.5 border border-cinema-border/40 hover:border-red-500/30 rounded-lg transition-all cursor-pointer"
+                className="text-zinc-500 hover:text-red-400 p-1.5 border border-cinema-border/40 hover:border-red-500/30 rounded-lg transition-all cursor-pointer shrink-0"
                 title="Remove path"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -470,6 +545,7 @@ export default function Settings() {
             {renderPathInputsSection("Movies Directories", moviesPaths, setMoviesPaths, "videos")}
             {renderPathInputsSection("TV Shows Directories", tvShowsPaths, setTvShowsPaths, "videos")}
             {renderPathInputsSection("Other Videos Directories", otherVideosPaths, setOtherVideosPaths, "videos")}
+            {renderPathInputsSection("Excluded Folders", excludePaths, setExcludePaths, "all", true)}
           </div>
 
           {saveDirsSuccess && (
@@ -683,6 +759,28 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* Directory Explorer Modal */}
+      {pickerConfig && (
+        <DirectoryPickerModal
+          isOpen={pickerConfig.isOpen}
+          initialPath={pickerConfig.initialPath}
+          categoryType={pickerConfig.categoryType}
+          categoryTitle={pickerConfig.categoryTitle}
+          onClose={() => setPickerConfig(null)}
+          onSelect={(selectedPath) => {
+            const index = pickerConfig.pathIndex;
+            setIsDirty(true);
+            pickerConfig.setPaths((prev) => {
+              const updated = [...prev];
+              updated[index] = selectedPath;
+              return updated;
+            });
+            setSaveDirsError("");
+            setPickerConfig(null);
+          }}
+        />
+      )}
     </div>
   );
 }

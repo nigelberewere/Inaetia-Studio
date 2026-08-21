@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import MovieCard from "../components/MovieCard";
 import MovieDetailModal from "../components/MovieDetailModal";
+import TVShowDetailModal from "../components/TVShowDetailModal";
 import { 
   Film, Tv, Shield, Folder, Play, Clock, HardDrive, 
   ChevronRight, RefreshCw, X, Clapperboard, Video,
@@ -876,171 +877,16 @@ export default function Movies() {
           )}
       </div>
 
-      {/* Netflix-style TV Show Details Immersive Overlay Panel */}
+      {/* TV Show Details Immersive Overlay Panel with Dynamic Collapsible Artwork */}
       {selectedShow && showDetails && (
-        <div 
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 animate-fade-in"
-          id="tv-show-details-modal"
-        >
-          <div className="relative w-full max-w-4xl bg-cinema-bg border border-cinema-border rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh]">
-            {/* Modal Header */}
-            <div 
-              style={{
-                backgroundImage: `linear-gradient(to top, #09090b, rgba(9,9,11,0.2) 50%, rgba(9,9,11,0.7)), url('/api/show-poster/${encodeURIComponent(showDetails.name)}?firstEpisodeId=${showDetails.episodesBySeason.get(selectedSeason)?.[0]?.id || ""}')`,
-                backgroundSize: "cover",
-                backgroundPosition: "center"
-              }}
-              className="relative aspect-[16/9] sm:aspect-[21/9] w-full flex flex-col justify-end p-4 sm:p-6 md:p-8 shrink-0 bg-zinc-900"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => setSelectedShow(null)}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 sm:p-2.5 rounded-full bg-black/60 hover:bg-black/90 hover:text-cinema-amber text-white transition-all cursor-pointer"
-                title="Close Panel"
-                id="btn-close-show-details"
-              >
-                <X className="w-4 sm:w-5 sm:h-5 h-4" />
-              </button>
-
-              <div className="space-y-1.5 max-w-3xl">
-                <span className="text-[10px] sm:text-xs font-bold text-cinema-amber uppercase tracking-wider bg-cinema-amber/10 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md border border-cinema-amber/20">
-                  TV Series
-                </span>
-                <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white drop-shadow-md mt-1.5 sm:mt-2 line-clamp-2 break-words leading-tight">
-                  {showDetails.name}
-                </h2>
-                
-                {/* TV Show Metadata Badges */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cinema-muted font-medium mt-1">
-                  {showDetails.year && (
-                    <span className="text-white font-semibold">{showDetails.year}</span>
-                  )}
-                  {showDetails.rating && (
-                    <span className="flex items-center gap-0.5 text-cinema-amber">
-                      ⭐ {Number(showDetails.rating).toFixed(1)}
-                    </span>
-                  )}
-                  {showDetails.studio && (
-                    <span className="px-1.5 py-0.2 bg-zinc-800 rounded text-zinc-300 font-bold uppercase text-[9px]">
-                      {showDetails.studio}
-                    </span>
-                  )}
-                  {showDetails.genres && showDetails.genres.length > 0 && (
-                    <span>• {showDetails.genres.join(", ")}</span>
-                  )}
-                </div>
-
-                {showDetails.plot ? (
-                  <p className="text-xs sm:text-sm text-zinc-300 mt-2 line-clamp-2 md:line-clamp-3 bg-black/50 backdrop-blur-sm p-2 sm:p-3 rounded-lg leading-relaxed shadow-inner">
-                    {showDetails.plot}
-                  </p>
-                ) : (
-                  <p className="text-[10px] sm:text-xs md:text-sm text-cinema-muted">
-                    {pluralize(showDetails.totalEpisodes, "episode")} available • Sorted sequentially
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Seasons Tab Selector Row */}
-            {showDetails.seasons.length > 1 && (
-              <div className="px-6 border-b border-cinema-border py-3 flex gap-2 overflow-x-auto shrink-0">
-                {showDetails.seasons.map((season) => (
-                  <button
-                    key={season}
-                    onClick={() => setSelectedSeason(season)}
-                    className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer shrink-0 ${
-                      selectedSeason === season
-                        ? "bg-cinema-amber text-cinema-bg"
-                        : "bg-cinema-card border border-cinema-border text-cinema-muted hover:text-white"
-                    }`}
-                  >
-                    {season}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Episodes List Container */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <h3 className="text-sm font-bold text-cinema-amber uppercase tracking-wider">
-                {selectedSeason} ({pluralize((showDetails.episodesBySeason.get(selectedSeason) || []).length, "Episode")})
-              </h3>
-              
-              <div className="grid gap-3" id="tv-episodes-list">
-                {(showDetails.episodesBySeason.get(selectedSeason) || []).map((episode, index) => {
-                  const progress = getEpisodeProgress(episode.id);
-                  return (
-                    <div
-                      key={episode.id}
-                      onClick={() => {
-                        setCurrentVideo(episode);
-                      }}
-                      className="group flex flex-col sm:flex-row items-stretch bg-cinema-card border border-cinema-border rounded-xl overflow-hidden hover:border-cinema-amber/50 transition-colors cursor-pointer p-2.5 gap-4"
-                      id={`episode-row-${episode.id}`}
-                    >
-                      {/* Image Preview Thumbnail */}
-                      <div className="relative aspect-[16/10] w-full sm:w-44 shrink-0 bg-black/40 rounded-lg overflow-hidden">
-                        <img
-                          src={episode.thumbnail}
-                          alt={episode.episodeTitle}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Play className="w-8 h-8 text-cinema-amber fill-current" />
-                        </div>
-                        {/* Format tag */}
-                        <span className="absolute top-1.5 right-1.5 bg-black/70 text-[9px] font-bold px-1 py-0.2 rounded text-white uppercase tracking-wider">
-                          {episode.extension.replace(".", "")}
-                        </span>
-
-                        {/* Custom watch history progress bar */}
-                        {progress !== undefined && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
-                            <div
-                              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-                              className="bg-cinema-amber h-full"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Episode Meta Info */}
-                      <div className="flex-1 flex flex-col justify-center min-w-0 py-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-bold text-sm md:text-base text-white line-clamp-2 break-words group-hover:text-cinema-amber transition-colors">
-                            {index + 1}. {episode.episodeTitle || episode.title}
-                          </h4>
-                        </div>
-                        <p className="text-xs text-cinema-muted line-clamp-1 mt-1 leading-relaxed">
-                          {episode.filename}
-                        </p>
-
-                        {episode.plot && (
-                          <p className="text-xs text-zinc-400 line-clamp-2 mt-1.5 leading-relaxed max-w-3xl">
-                            {episode.plot}
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-4 text-xs text-cinema-muted mt-3 font-medium">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {formatDuration(episode.duration)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <HardDrive className="w-3.5 h-3.5" />
-                            {formatSize(episode.size)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
+        <TVShowDetailModal
+          showDetails={showDetails}
+          selectedSeason={selectedSeason}
+          onSelectSeason={setSelectedSeason}
+          onClose={() => setSelectedShow(null)}
+          onPlayEpisode={(episode) => setCurrentVideo(episode)}
+          getEpisodeProgress={getEpisodeProgress}
+        />
       )}
       {activeDetailMovie && (
         <MovieDetailModal 

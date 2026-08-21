@@ -19,6 +19,7 @@ import {
 } from "../auth";
 import { checkCache, triggerScan, getFilesRecursively } from "../scanner";
 import { loadProfiles } from "./profiles";
+import { browseDirectory, createNewFolder, getDetectedMounts } from "../filesystem";
 
 const router = express.Router();
 
@@ -122,6 +123,7 @@ router.get("/api/status", async (req, res) => {
         moviesPaths: process.env.MOVIES_PATHS || "",
         tvShowsPaths: process.env.TV_SHOWS_PATHS || "",
         otherVideosPaths: process.env.OTHER_VIDEOS_PATHS || "",
+        excludePaths: process.env.EXCLUDE_PATHS || "",
         appName: process.env.APP_NAME || "Inaetia Studios",
         port: PORT,
       });
@@ -205,8 +207,49 @@ router.get("/api/setup/status", (req, res) => {
     moviesPaths: process.env.MOVIES_PATHS || "",
     tvShowsPaths: process.env.TV_SHOWS_PATHS || "",
     otherVideosPaths: process.env.OTHER_VIDEOS_PATHS || "",
+    excludePaths: process.env.EXCLUDE_PATHS || "",
     serverIp: getServerIpAddress(),
   });
+});
+
+// GET /api/setup/quick-mounts
+router.get("/api/setup/quick-mounts", async (req, res) => {
+  try {
+    const mounts = await getDetectedMounts();
+    res.json({ mounts });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to detect storage mounts", details: err.message });
+  }
+});
+
+// GET /api/setup/browse-directories
+router.get("/api/setup/browse-directories", async (req, res) => {
+  try {
+    const targetPath = (req.query.path as string) || "";
+    const result = await browseDirectory(targetPath);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to browse directory", details: err.message });
+  }
+});
+
+// POST /api/setup/create-directory
+router.post("/api/setup/create-directory", (req, res) => {
+  try {
+    const { parentPath, folderName } = req.body;
+    if (!parentPath || !folderName) {
+      return res.status(400).json({ error: "parentPath and folderName are required" });
+    }
+
+    const result = createNewFolder(parentPath, folderName);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || "Failed to create folder" });
+    }
+
+    res.json({ success: true, path: result.path });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to create folder", details: err.message });
+  }
 });
 
 // POST /api/setup/validate-path
@@ -254,6 +297,7 @@ router.post("/api/setup/submit", async (req, res) => {
     moviesPaths,
     tvShowsPaths,
     otherVideosPaths,
+    excludePaths,
     performanceProfile,
     themeColor,
     appName,
@@ -263,8 +307,9 @@ router.post("/api/setup/submit", async (req, res) => {
   const rawMoviesPaths = Array.isArray(moviesPaths) ? moviesPaths : videosPath ? [videosPath] : ["media/Videos"];
   const rawTvShowsPaths = Array.isArray(tvShowsPaths) ? tvShowsPaths : videosPath ? [videosPath] : ["media/Videos"];
   const rawOtherVideosPaths = Array.isArray(otherVideosPaths) ? otherVideosPaths : videosPath ? [videosPath] : ["media/Videos"];
+  const rawExcludePaths = Array.isArray(excludePaths) ? excludePaths : typeof excludePaths === "string" && excludePaths.trim() ? [excludePaths] : [];
 
-  const pathsToCheck = [...rawMusicPaths, ...rawMoviesPaths, ...rawTvShowsPaths, ...rawOtherVideosPaths];
+  const pathsToCheck = [...rawMusicPaths, ...rawMoviesPaths, ...rawTvShowsPaths, ...rawOtherVideosPaths, ...rawExcludePaths];
   if (musicVideosPath) pathsToCheck.push(musicVideosPath);
 
   for (const p of pathsToCheck) {
@@ -280,11 +325,13 @@ router.post("/api/setup/submit", async (req, res) => {
   const moviesPathsArr = rawMoviesPaths.map((p) => sanitizeEnvVal(p));
   const tvShowsPathsArr = rawTvShowsPaths.map((p) => sanitizeEnvVal(p));
   const otherVideosPathsArr = rawOtherVideosPaths.map((p) => sanitizeEnvVal(p));
+  const excludePathsArr = rawExcludePaths.map((p) => sanitizeEnvVal(p)).filter(Boolean);
 
   const musicPathsStr = musicPathsArr.join(",");
   const moviesPathsStr = moviesPathsArr.join(",");
   const tvShowsPathsStr = tvShowsPathsArr.join(",");
   const otherVideosPathsStr = otherVideosPathsArr.join(",");
+  const excludePathsStr = excludePathsArr.join(",");
 
   const finalVideosPath = moviesPathsArr[0] || otherVideosPathsArr[0] || "media/Videos";
   const finalMusicPath = musicPathsArr[0] || "media/Music";
@@ -316,6 +363,7 @@ MUSIC_PATHS="${musicPathsStr}"
 MOVIES_PATHS="${moviesPathsStr}"
 TV_SHOWS_PATHS="${tvShowsPathsStr}"
 OTHER_VIDEOS_PATHS="${otherVideosPathsStr}"
+EXCLUDE_PATHS="${excludePathsStr}"
 THUMBNAILS_CACHE_PATH="/tmp/inaetia/thumbs"
 PROFILES_PATH="~/.inaetia/profiles"
 MAX_CONCURRENT_FFPROBE=${maxConcurrentFfprobe}
@@ -340,6 +388,7 @@ SERVER_IP="${getServerIpAddress()}"
     process.env.MOVIES_PATHS = moviesPathsStr;
     process.env.TV_SHOWS_PATHS = tvShowsPathsStr;
     process.env.OTHER_VIDEOS_PATHS = otherVideosPathsStr;
+    process.env.EXCLUDE_PATHS = excludePathsStr;
     process.env.THUMBNAILS_CACHE_PATH = "/tmp/inaetia/thumbs";
     process.env.PROFILES_PATH = "~/.inaetia/profiles";
     process.env.MAX_CONCURRENT_FFPROBE = maxConcurrentFfprobe.toString();
@@ -373,18 +422,19 @@ router.post("/api/settings/save-directories", async (req, res) => {
     }
   }
 
-  const { musicPaths, moviesPaths, tvShowsPaths, otherVideosPaths } = req.body;
+  const { musicPaths, moviesPaths, tvShowsPaths, otherVideosPaths, excludePaths } = req.body;
 
   if (!musicPaths || !moviesPaths || !tvShowsPaths || !otherVideosPaths) {
-    return res.status(400).json({ error: "All directory path arrays are required" });
+    return res.status(400).json({ error: "All library directory path arrays are required" });
   }
 
   const rawMusic = Array.isArray(musicPaths) ? musicPaths : [musicPaths];
   const rawMovies = Array.isArray(moviesPaths) ? moviesPaths : [moviesPaths];
   const rawTvShows = Array.isArray(tvShowsPaths) ? tvShowsPaths : [tvShowsPaths];
   const rawOtherVideos = Array.isArray(otherVideosPaths) ? otherVideosPaths : [otherVideosPaths];
+  const rawExcludes = Array.isArray(excludePaths) ? excludePaths : typeof excludePaths === "string" && excludePaths.trim() ? [excludePaths] : [];
 
-  const allPaths = [...rawMusic, ...rawMovies, ...rawTvShows, ...rawOtherVideos];
+  const allPaths = [...rawMusic, ...rawMovies, ...rawTvShows, ...rawOtherVideos, ...rawExcludes];
   for (const p of allPaths) {
     if (p) {
       const check = isPathSafe(p);
@@ -398,11 +448,13 @@ router.post("/api/settings/save-directories", async (req, res) => {
   const moviesPathsArr = rawMovies.map((p) => sanitizeEnvVal(p));
   const tvShowsPathsArr = rawTvShows.map((p) => sanitizeEnvVal(p));
   const otherVideosPathsArr = rawOtherVideos.map((p) => sanitizeEnvVal(p));
+  const excludePathsArr = rawExcludes.map((p) => sanitizeEnvVal(p)).filter(Boolean);
 
   const musicPathsStr = musicPathsArr.join(",");
   const moviesPathsStr = moviesPathsArr.join(",");
   const tvShowsPathsStr = tvShowsPathsArr.join(",");
   const otherVideosPathsStr = otherVideosPathsArr.join(",");
+  const excludePathsStr = excludePathsArr.join(",");
 
   try {
     const envPath = path.join(process.cwd(), ".env");
@@ -429,6 +481,7 @@ router.post("/api/settings/save-directories", async (req, res) => {
     updatedEnv = updateEnvVar(updatedEnv, "MOVIES_PATHS", moviesPathsStr);
     updatedEnv = updateEnvVar(updatedEnv, "TV_SHOWS_PATHS", tvShowsPathsStr);
     updatedEnv = updateEnvVar(updatedEnv, "OTHER_VIDEOS_PATHS", otherVideosPathsStr);
+    updatedEnv = updateEnvVar(updatedEnv, "EXCLUDE_PATHS", excludePathsStr);
 
     if (musicPathsArr.length > 0) {
       updatedEnv = updateEnvVar(updatedEnv, "MUSIC_PATH", musicPathsArr[0]);
@@ -445,6 +498,7 @@ router.post("/api/settings/save-directories", async (req, res) => {
     process.env.MOVIES_PATHS = moviesPathsStr;
     process.env.TV_SHOWS_PATHS = tvShowsPathsStr;
     process.env.OTHER_VIDEOS_PATHS = otherVideosPathsStr;
+    process.env.EXCLUDE_PATHS = excludePathsStr;
     if (musicPathsArr.length > 0) {
       process.env.MUSIC_PATH = musicPathsArr[0];
     }

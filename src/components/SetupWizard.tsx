@@ -3,11 +3,12 @@ import { useApp } from "../context/AppContext";
 import { safeFetch } from "../utils";
 import { 
   Server, Monitor, Cpu, Check, ShieldAlert, 
-  Folder, ArrowRight, ArrowLeft, Loader2, Play,
-  Gauge, Zap, Rocket
+  Folder, FolderOpen, ArrowRight, ArrowLeft, Loader2, Play,
+  Gauge, Zap, Rocket, FolderX, Ban, HelpCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { InaetiaLogo } from "./common/InaetiaLogo";
+import DirectoryPickerModal from "./DirectoryPickerModal";
 
 const PRESET_COLORS = [
   { name: "Amber Gold", hex: "#F5A623" },
@@ -56,6 +57,17 @@ export default function SetupWizard() {
   const [moviesPaths, setMoviesPaths] = useState<string[]>(["media/Videos/Movies"]);
   const [tvShowsPaths, setTvShowsPaths] = useState<string[]>(["media/Videos/Tv Shows"]);
   const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>(["media/Videos"]);
+  const [excludePaths, setExcludePaths] = useState<string[]>([]);
+
+  // Directory Explorer Modal State
+  const [pickerConfig, setPickerConfig] = useState<{
+    isOpen: boolean;
+    categoryTitle: string;
+    categoryType: "music" | "videos" | "all";
+    pathIndex: number;
+    initialPath: string;
+    setPaths: React.Dispatch<React.SetStateAction<string[]>>;
+  } | null>(null);
 
   // Step 3 Performance Profiles
   const [perfProfile, setPerfProfile] = useState<"low" | "mid" | "high">("mid");
@@ -104,6 +116,10 @@ export default function SetupWizard() {
             setOtherVideosPaths(data.otherVideosPaths.split(","));
           } else if (data.videosPath) {
             setOtherVideosPaths([data.videosPath]);
+          }
+
+          if (data.excludePaths) {
+            setExcludePaths(data.excludePaths.split(",").filter(Boolean));
           }
         }
       } catch (err) {
@@ -211,6 +227,7 @@ export default function SetupWizard() {
     const activeMovies = moviesPaths.filter(p => p.trim() !== "");
     const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
     const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
+    const activeExcludes = excludePaths.filter(p => p.trim() !== "");
 
     try {
       const res = await safeFetch("/api/setup/submit", {
@@ -221,6 +238,7 @@ export default function SetupWizard() {
           moviesPaths: activeMovies,
           tvShowsPaths: activeTv,
           otherVideosPaths: activeOther,
+          excludePaths: activeExcludes,
           performanceProfile: perfProfile,
           themeColor: selectedColor,
           appName: appNameInput
@@ -246,15 +264,18 @@ export default function SetupWizard() {
     title: string,
     paths: string[],
     setPaths: React.Dispatch<React.SetStateAction<string[]>>,
-    type: "music" | "videos",
-    description: string
+    type: "music" | "videos" | "all",
+    description: string,
+    isOptionalExclude: boolean = false
   ) => {
     const addPath = () => {
       setPaths([...paths, ""]);
     };
 
     const removePath = (index: number) => {
-      if (paths.length === 1) {
+      if (isOptionalExclude && paths.length === 1) {
+        setPaths([]);
+      } else if (paths.length === 1) {
         setPaths([""]);
       } else {
         setPaths(paths.filter((_, i) => i !== index));
@@ -267,37 +288,84 @@ export default function SetupWizard() {
       setPaths(updated);
     };
 
+    const openBrowser = (index: number, currentVal: string) => {
+      setPickerConfig({
+        isOpen: true,
+        categoryTitle: title,
+        categoryType: type,
+        pathIndex: index,
+        initialPath: currentVal || (type === "music" ? "media/Music" : "media/Videos"),
+        setPaths,
+      });
+    };
+
     return (
-      <div className="space-y-2 bg-black/25 p-4 rounded-2xl border border-cinema-border/50">
+      <div className={`space-y-2 p-4 rounded-2xl border ${isOptionalExclude ? 'bg-red-950/10 border-red-500/20' : 'bg-black/25 border-cinema-border/50'}`}>
         <div className="flex justify-between items-center">
           <div className="space-y-0.5 text-left">
             <label className="font-bold text-xs uppercase text-zinc-300 tracking-wider flex items-center gap-1.5">
-              <Folder className="w-4 h-4 text-cinema-amber" /> {title}
+              {isOptionalExclude ? (
+                <FolderX className="w-4 h-4 text-red-400" />
+              ) : (
+                <Folder className="w-4 h-4 text-cinema-amber" />
+              )}
+              <span>{title}</span>
+              {isOptionalExclude && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30 uppercase tracking-widest">
+                  Optional
+                </span>
+              )}
             </label>
             <p className="text-[10px] text-zinc-500 italic">{description}</p>
           </div>
           <button
             type="button"
             onClick={addPath}
-            className="text-[10px] text-cinema-amber font-extrabold bg-cinema-amber/10 px-2.5 py-1 rounded-lg border border-cinema-amber/20 hover:bg-cinema-amber/20 transition-all cursor-pointer"
+            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+              isOptionalExclude 
+                ? 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20' 
+                : 'text-cinema-amber bg-cinema-amber/10 border-cinema-amber/20 hover:bg-cinema-amber/20'
+            }`}
           >
-            + Add Path
+            + Add {isOptionalExclude ? 'Exclusion' : 'Path'}
           </button>
         </div>
         <div className="space-y-2 pt-1">
+          {paths.length === 0 && isOptionalExclude && (
+            <p className="text-[11px] text-zinc-600 italic py-1">
+              No excluded folders. All subdirectories in selected media paths will be scanned.
+            </p>
+          )}
           {paths.map((p, idx) => (
             <div key={idx} className="flex gap-2 items-center">
               <input
                 type="text"
-                placeholder={type === "music" ? "e.g. /home/user/Music" : "e.g. /home/user/Videos"}
+                placeholder={isOptionalExclude ? "e.g. /media/Videos/sample-clips or /home/user/Music/.temp" : (type === "music" ? "e.g. /home/user/Music or /mnt/storage/Music" : "e.g. /home/user/Videos or /mnt/storage/Videos")}
                 value={p}
                 onChange={(e) => updatePathValue(idx, e.target.value)}
-                className="flex-1 bg-[#070712] border border-cinema-border/60 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-cinema-amber"
+                className={`flex-1 bg-[#070712] border rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none ${
+                  isOptionalExclude 
+                    ? 'border-red-500/30 focus:border-red-400' 
+                    : 'border-cinema-border/60 focus:border-cinema-amber'
+                }`}
               />
               <button
                 type="button"
+                onClick={() => openBrowser(idx, p)}
+                className={`px-3 py-2 border rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                  isOptionalExclude
+                    ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30 hover:border-red-500/60'
+                    : 'bg-cinema-amber/10 hover:bg-cinema-amber/20 text-cinema-amber border-cinema-amber/30 hover:border-cinema-amber/60'
+                }`}
+                title="Browse server directories and mounted storage"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Browse</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => removePath(idx)}
-                className="text-zinc-500 hover:text-red-400 p-2 border border-cinema-border/40 hover:border-red-500/30 rounded-xl transition-all cursor-pointer"
+                className="text-zinc-500 hover:text-red-400 p-2 border border-cinema-border/40 hover:border-red-500/30 rounded-xl transition-all cursor-pointer shrink-0"
                 title="Remove path"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -594,6 +662,16 @@ export default function SetupWizard() {
                         "videos",
                         "Miscellaneous movies, home videos, clips, or sub-channel media"
                       )}
+
+                      {/* Exclude Folders Category */}
+                      {renderPathCategoryInputs(
+                        "Excluded Folders",
+                        excludePaths,
+                        setExcludePaths,
+                        "all",
+                        "Specify directories to ignore during scan even if inside selected media paths",
+                        true
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -836,6 +914,27 @@ export default function SetupWizard() {
 
           </div>
         </motion.div>
+      )}
+
+      {/* Server & Mounted Storage Directory Picker Modal */}
+      {pickerConfig && (
+        <DirectoryPickerModal
+          isOpen={pickerConfig.isOpen}
+          initialPath={pickerConfig.initialPath}
+          categoryType={pickerConfig.categoryType}
+          categoryTitle={pickerConfig.categoryTitle}
+          onClose={() => setPickerConfig(null)}
+          onSelect={(selectedPath) => {
+            const index = pickerConfig.pathIndex;
+            pickerConfig.setPaths((prev) => {
+              const updated = [...prev];
+              updated[index] = selectedPath;
+              return updated;
+            });
+            setErrorMsg(null);
+            setPickerConfig(null);
+          }}
+        />
       )}
     </AnimatePresence>
   );
