@@ -58,7 +58,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white/90 hover:text-cinema-amber border border-white/10 transition-all cursor-pointer z-20 backdrop-blur-md appletv-btn"
+            className="absolute top-5 right-5 p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white/90 hover:text-cinema-amber border border-white/10 transition-all cursor-pointer z-20 backdrop-blur-md platform-btn"
             title="Close"
           >
             <X className="w-5 h-5" />
@@ -199,7 +199,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
               <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-white/10">
                 <button
                   onClick={handlePlay}
-                  className="flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl bg-cinema-amber hover:bg-cinema-amber-hover text-cinema-bg transition-all cursor-pointer text-sm font-bold shadow-xl shadow-cinema-amber/25 appletv-btn"
+                  className="flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl bg-cinema-amber hover:bg-cinema-amber-hover text-cinema-bg transition-all cursor-pointer text-sm font-bold shadow-xl shadow-cinema-amber/25 platform-btn"
                 >
                   <Play className="w-5 h-5 fill-cinema-bg" />
                   {progress !== undefined ? "Resume Playing" : "Play Now"}
@@ -210,7 +210,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                     href={movie.trailer}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 border border-white/15 text-white hover:bg-white/20 transition-all text-sm font-semibold backdrop-blur-md appletv-btn"
+                    className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 border border-white/15 text-white hover:bg-white/20 transition-all text-sm font-semibold backdrop-blur-md platform-btn"
                   >
                     <Youtube className="w-5 h-5 text-red-500 fill-current" />
                     Trailer

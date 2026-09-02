@@ -111,7 +111,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="absolute inset-0 w-full h-full overflow-hidden"
         >
-          {/* Background Cinematic Artwork & Apple TV Scrim Gradients (Full Bleed Cover) */}
+          {/* Background Cinematic Artwork & platform scrim gradients (Full Bleed Cover) */}
           <div className="absolute inset-0 z-0 overflow-hidden bg-[#07070e] w-full h-full">
             <motion.img
               key={backdropImg}
@@ -123,7 +123,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
               referrerPolicy="no-referrer"
               className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-[10000ms] ease-out"
             />
-            {/* Multi-stage Apple TV Vignette / Scrim Gradient Overlays for Guaranteed Text Legibility */}
+            {/* Multi-stage platform vignette / scrim gradient overlays for guaranteed text legibility */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#07070e] via-[#07070e]/80 to-transparent pointer-events-none" />
             <div className="absolute inset-0 bg-gradient-to-r from-[#07070e] via-[#07070e]/70 to-transparent pointer-events-none" />
             <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#07070e] via-[#07070e]/50 to-transparent pointer-events-none" />
@@ -214,7 +214,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
               <button
                 id="btn-hero-play"
                 onClick={() => setCurrentVideo(activeMovie)}
-                className="flex items-center gap-2 px-6 py-3 bg-cinema-amber hover:bg-cinema-amber-hover text-cinema-bg rounded-xl font-bold transition-all duration-200 appletv-btn shadow-lg shadow-cinema-amber/30 cursor-pointer text-xs sm:text-sm"
+                className="flex items-center gap-2 px-6 py-3 bg-cinema-amber hover:bg-cinema-amber-hover text-cinema-bg rounded-xl font-bold transition-all duration-200 platform-btn shadow-lg shadow-cinema-amber/30 cursor-pointer text-xs sm:text-sm"
               >
                 <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-cinema-bg" />
                 Play Now
@@ -223,7 +223,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
               <button
                 id="btn-hero-info"
                 onClick={() => setShowInfo(!showInfo)}
-                className="flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white rounded-xl font-semibold transition-all duration-200 appletv-btn cursor-pointer text-xs sm:text-sm backdrop-blur-md"
+                className="flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white rounded-xl font-semibold transition-all duration-200 platform-btn cursor-pointer text-xs sm:text-sm backdrop-blur-md"
               >
                 <Info className="w-4 h-4 sm:w-5 sm:h-5" />
                 {showInfo ? "Hide Details" : "More Info"}
@@ -258,14 +258,14 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
         <>
           <button
             onClick={handlePrev}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/80 border border-white/15 text-white/90 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer hidden md:flex items-center justify-center shadow-2xl backdrop-blur-md appletv-btn"
+            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/80 border border-white/15 text-white/90 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer hidden md:flex items-center justify-center shadow-2xl backdrop-blur-md platform-btn"
             title="Previous Slide"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
           <button
             onClick={handleNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/80 border border-white/15 text-white/90 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer hidden md:flex items-center justify-center shadow-2xl backdrop-blur-md appletv-btn"
+            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-black/50 hover:bg-black/80 border border-white/15 text-white/90 hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20 cursor-pointer hidden md:flex items-center justify-center shadow-2xl backdrop-blur-md platform-btn"
             title="Next Slide"
           >
             <ChevronRight className="w-6 h-6" />

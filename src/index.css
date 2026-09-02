@@ -54,7 +54,7 @@ body {
   box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.8), 0 0 20px -5px var(--color-cinema-amber-hover, rgba(245, 166, 35, 0.2));
 }
 
-/* Apple TV Floating Card Micro-Interaction */
+/* Floating Card Micro-Interaction */
 .movie-card-hover {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease;
   will-change: transform;
@@ -66,15 +66,15 @@ body {
   border-color: var(--color-cinema-amber) !important;
 }
 
-.appletv-btn {
+.platform-btn {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.appletv-btn:hover {
+.platform-btn:hover {
   transform: scale(1.04);
 }
 
-.appletv-btn:active {
+.platform-btn:active {
   transform: scale(0.96);
 }
 

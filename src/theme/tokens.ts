@@ -1,6 +1,6 @@
 /**
  * Inaetia Studios - Unified Design Tokens & Theme Constants
- * Apple TV / High-End Streaming Platform Quality Standard
+ * Platform / High-End Streaming Quality Standard
  */
 
 export const DESIGN_TOKENS = {

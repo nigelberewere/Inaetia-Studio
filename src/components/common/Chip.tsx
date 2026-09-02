@@ -24,7 +24,7 @@ export const Chip: React.FC<ChipProps> = ({
       id={id}
       onClick={onClick}
       type="button"
-      className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer select-none border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cinema-amber ${
+      className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer select-none border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cinema-amber ${
         active
           ? "bg-cinema-amber text-cinema-bg border-cinema-amber shadow-lg shadow-cinema-amber/25 font-bold scale-[1.02]"
           : "bg-white/5 hover:bg-white/12 text-cinema-text hover:text-white border-white/10 hover:border-white/20"

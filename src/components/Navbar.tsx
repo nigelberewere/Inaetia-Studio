@@ -92,12 +92,12 @@ export default function Navbar() {
         </span>
       </div>
 
-      {/* Center Nav Links - Apple TV Segmented Glass Controller */}
+      {/* Center Nav Links - segmented glass controller */}
       <div className="hidden md:flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1.5 rounded-full border border-white/10 shadow-inner">
         <button
           id="btn-nav-movies"
           onClick={() => { clearSearch(); setActiveView("movies"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
             activeView === "movies"
               ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
               : "text-zinc-300 hover:text-white hover:bg-white/10"
@@ -109,7 +109,7 @@ export default function Navbar() {
         <button
           id="btn-nav-livetv"
           onClick={() => { clearSearch(); setActiveView("livetv"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
             activeView === "livetv"
               ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
               : "text-zinc-300 hover:text-white hover:bg-white/10"
@@ -121,7 +121,7 @@ export default function Navbar() {
         <button
           id="btn-nav-radio"
           onClick={() => { clearSearch(); setActiveView("radio"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
             activeView === "radio" || activeView === "radioguide"
               ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
               : "text-zinc-300 hover:text-white hover:bg-white/10"
@@ -133,7 +133,7 @@ export default function Navbar() {
         <button
           id="btn-nav-music"
           onClick={() => { clearSearch(); setActiveView("music"); }}
-          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 appletv-btn cursor-pointer ${
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
             activeView === "music"
               ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
               : "text-zinc-300 hover:text-white hover:bg-white/10"

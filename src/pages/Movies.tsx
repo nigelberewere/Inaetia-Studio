@@ -635,7 +635,7 @@ export default function Movies() {
                     <div
                       key={show.name}
                       onClick={() => handleOpenShow(show.name)}
-                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer appletv-card shadow-xl flex flex-col justify-end p-4"
+                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer platform-card shadow-xl flex flex-col justify-end p-4"
                       id={`series-card-${show.name.replace(/\s+/g, "-")}`}
                     >
                       <img
@@ -674,7 +674,7 @@ export default function Movies() {
                     <div
                       key={show.name}
                       onClick={() => handleOpenShow(show.name)}
-                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md appletv-card"
+                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
                       id={`series-card-${show.name.replace(/\s+/g, "-")}`}
                     >
                       <img
@@ -735,7 +735,7 @@ export default function Movies() {
                   <div
                     key={movie.id}
                     onClick={() => setActiveDetailMovie(movie)}
-                    className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer appletv-card shadow-xl flex flex-col justify-end p-4"
+                    className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer platform-card shadow-xl flex flex-col justify-end p-4"
                   >
                     <img
                       src={movie.fanart || movie.thumbnail || `/api/artwork/${movie.id}/poster`}
@@ -767,7 +767,8 @@ export default function Movies() {
                   <div
                     key={movie.id}
                     onClick={() => setActiveDetailMovie(movie)}
-                    className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md appletv-card"
+                    className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
+                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
                   >
                     <img
                       src={movie.poster || movie.thumbnail}
@@ -834,7 +835,7 @@ export default function Movies() {
                     <div
                       key={video.id}
                       onClick={() => setActiveDetailMovie(video)}
-                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer appletv-card shadow-xl flex flex-col justify-end p-4"
+                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer platform-card shadow-xl flex flex-col justify-end p-4"
                     >
                       <img
                         src={video.fanart || video.thumbnail || `/api/artwork/${video.id}/poster`}
@@ -866,7 +867,7 @@ export default function Movies() {
                     <div
                       key={video.id}
                       onClick={() => setActiveDetailMovie(video)}
-                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md appletv-card"
+                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
                     >
                       <img
                         src={video.poster || video.thumbnail}
