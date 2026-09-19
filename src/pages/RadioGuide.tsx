@@ -90,7 +90,7 @@ export default function RadioGuide() {
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 select-none">
+    <div className="space-y-4 md:space-y-6 select-none">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-cinema-border pb-5">
         <div className="flex items-center gap-3">

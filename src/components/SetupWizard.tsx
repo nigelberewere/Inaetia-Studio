@@ -6,7 +6,7 @@ import {
   Folder, FolderOpen, ArrowRight, ArrowLeft, Loader2, Play,
   Gauge, Zap, Rocket, FolderX, Ban, HelpCircle
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { InaetiaLogo } from "./common/InaetiaLogo";
 import DirectoryPickerModal from "./DirectoryPickerModal";
 
@@ -32,16 +32,7 @@ export default function SetupWizard() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Auto-transition from intro to setup screen after 4.2 seconds
-  useEffect(() => {
-    if (showIntro) {
-      const timer = setTimeout(() => {
-        setShowIntro(false);
-      }, 4200);
-      return () => clearTimeout(timer);
-    }
-  }, [showIntro]);
+  const prefersReducedMotion = useReducedMotion();
 
   // System Info from backend
   const [sysInfo, setSysInfo] = useState({
@@ -400,14 +391,14 @@ export default function SetupWizard() {
               animate={{ 
                 scale: 1, 
                 opacity: 1,
-                y: [0, -8, 0],
+                y: prefersReducedMotion ? 0 : [0, -8, 0],
               }}
               transition={{ 
-                delay: 0.2, 
-                duration: 1, 
+                delay: prefersReducedMotion ? 0 : 0.2, 
+                duration: prefersReducedMotion ? 0 : 1, 
                 ease: "easeOut",
                 y: {
-                  repeat: Infinity,
+                  repeat: prefersReducedMotion ? 0 : Infinity,
                   duration: 3,
                   ease: "easeInOut"
                 }
@@ -479,7 +470,7 @@ export default function SetupWizard() {
               ENTERTAINMENT SYSTEMS
             </motion.p>
 
-            {/* Glowing Action Button or Auto-skip progress bar */}
+            {/* Glowing action button */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -496,17 +487,6 @@ export default function SetupWizard() {
                 <span className="absolute inset-0 rounded-full bg-cinema-amber/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
               </button>
 
-              <div className="w-32 h-[2px] bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: "0%" }}
-                  animate={{ width: "100%" }}
-                  transition={{ duration: 3.5, delay: 0.5, ease: "linear" }}
-                  className="h-full bg-cinema-amber shadow-[0_0_8px_rgba(245,166,35,0.8)]"
-                />
-              </div>
-              <span className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">
-                Auto-starting...
-              </span>
             </motion.div>
           </div>
         </motion.div>

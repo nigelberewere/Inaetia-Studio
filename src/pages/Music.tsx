@@ -77,7 +77,7 @@ export default function Music() {
   const selectedArtistAlbums = selectedArtist ? groupedMusic[selectedArtist] : {};
 
   return (
-    <div className="space-y-8 pb-28 animate-fade-in" id="music-view-page">
+    <div className="space-y-6 pb-28 animate-fade-in" id="music-view-page">
       {/* Title Header */}
       <div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">

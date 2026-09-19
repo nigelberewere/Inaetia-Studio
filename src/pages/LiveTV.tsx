@@ -107,7 +107,7 @@ function LiveTVContent() {
   }, []);
 
   return (
-    <div className="space-y-6 md:space-y-8 pb-16">
+    <div className="space-y-4 md:space-y-6 pb-16">
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-cinema-border pb-5">
         <div>
@@ -234,7 +234,16 @@ function ChannelCardItem({ ch, onSelectChannel }: ChannelCardItemProps) {
   return (
     <div
       onClick={() => onSelectChannel(ch)}
-      className="group bg-cinema-card-bg border border-cinema-border rounded-2xl overflow-hidden hover:border-cinema-amber/60 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-pointer flex flex-col h-full relative"
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelectChannel(ch);
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-label={`Open ${ch.name} channel`}
+      className="group bg-cinema-card-bg border border-cinema-border rounded-2xl overflow-hidden hover:border-cinema-amber/60 transition-all duration-300 shadow-lg hover:shadow-2xl cursor-pointer flex flex-col h-full relative text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cinema-amber"
       id={`channel-card-${ch.id}`}
     >
       {/* Tile Artwork Banner (16:9 Aspect ratio frame) */}

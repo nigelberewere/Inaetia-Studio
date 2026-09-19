@@ -154,8 +154,17 @@ export default function WhosWatching() {
                 {/* Profile Avatar Circle */}
                 <div 
                   onClick={() => handleProfileClick(profile)}
-                  style={{ backgroundColor: profile.color }}
-                  className={`w-[120px] h-[120px] rounded-full flex items-center justify-center text-white text-4xl font-extrabold relative shadow-lg cursor-pointer transition-all duration-300
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleProfileClick(profile);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Select ${profile.name} profile`}
+                  style={{ borderColor: profile.color }}
+                  className={`w-[120px] h-[120px] rounded-full border-2 flex items-center justify-center text-white text-4xl font-extrabold relative shadow-lg cursor-pointer transition-all duration-300 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cinema-amber
                     ${isManaging ? 'ring-4 ring-white/10' : 'hover:scale-105 hover:shadow-2xl'}
                   `}
                   onMouseEnter={(e) => {
@@ -167,7 +176,7 @@ export default function WhosWatching() {
                     e.currentTarget.style.boxShadow = '';
                   }}
                 >
-                  <ProfileAvatar avatar={profile.avatar} className="w-14 h-14 text-white" />
+                  <ProfileAvatar avatar={profile.avatar} className="w-full h-full text-white" />
 
                   {/* Lock Indicator if Profile has PIN */}
                   {profile.hasPin && !isManaging && (

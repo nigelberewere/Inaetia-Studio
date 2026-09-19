@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Movie, HeroRecommendation } from "../types";
 import { useApp } from "../context/AppContext";
 import { Play, Info, Calendar, Clock, Disc, Tv, Clapperboard, ChevronLeft, ChevronRight, Star, ShieldAlert, Sparkles } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import { formatDuration, formatSize, formatCleanDate, formatRating, sanitizeTitle } from "../utils";
 import { Badge } from "./common/Badge";
 
@@ -17,6 +17,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
   const [showInfo, setShowInfo] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   // If recommendations passed, build list from recommendation movies
   const recList = recommendations.length > 0 ? recommendations : [];
@@ -31,14 +32,14 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
 
   // Auto-play interval
   useEffect(() => {
-    if (list.length <= 1 || isHovered) return;
+    if (list.length <= 1 || isHovered || prefersReducedMotion) return;
 
     const timer = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % list.length);
     }, 7000);
 
     return () => clearInterval(timer);
-  }, [list.length, isHovered]);
+  }, [list.length, isHovered, prefersReducedMotion]);
 
   if (list.length === 0) {
     return (
@@ -97,7 +98,7 @@ export default function Hero({ movies = [], movie, recommendations = [] }: HeroP
 
   return (
     <div 
-      className="relative w-full aspect-[16/9] sm:aspect-[21/9] min-h-[320px] sm:min-h-[420px] max-h-[580px] rounded-2xl sm:rounded-3xl overflow-hidden bg-cinema-card border border-white/10 mb-8 group select-none shadow-2xl"
+      className="relative w-full aspect-[16/9] sm:aspect-[21/9] min-h-[280px] sm:min-h-[340px] max-h-[500px] rounded-2xl sm:rounded-3xl overflow-hidden bg-cinema-card border border-white/10 mb-8 group select-none shadow-2xl"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       id="hero-carousel-container"

@@ -367,7 +367,7 @@ export default function Movies() {
   };
 
   return (
-    <div className="space-y-6 pb-20 animate-fade-in" id="movies-library-page">
+    <div className="space-y-4 pb-20 animate-fade-in" id="movies-library-page">
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -393,9 +393,9 @@ export default function Movies() {
       </div>
 
       {/* Two-Row Taxonomy Filter Bar */}
-      <div className="space-y-3" id="taxonomy-filters-container">
+      <div className="space-y-2" id="taxonomy-filters-container">
         {/* Row 1: Content Type Filter */}
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-cinema-muted/80 flex items-center gap-1">
             <Layers className="w-3 h-3 text-cinema-amber" /> Content Type
           </span>
@@ -433,7 +433,7 @@ export default function Movies() {
         </div>
 
         {/* Row 2: Collections & Genres Filter */}
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-cinema-muted/80 flex items-center gap-1">
             <Tag className="w-3 h-3 text-cinema-amber" /> Collections & Genres
           </span>
@@ -486,7 +486,7 @@ export default function Movies() {
       </div>
 
       {/* Advanced Filter & Sorting Toolbar */}
-      <div className="p-4 rounded-2xl glass-panel border border-white/10 flex flex-wrap items-center justify-between gap-4">
+      <div className="p-3 rounded-2xl glass-panel border border-white/10 flex flex-wrap items-center justify-between gap-3">
         {/* Left Controls: Filter Badges & Sorting */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {/* Sort Selection */}
@@ -576,7 +576,7 @@ export default function Movies() {
       </div>
 
       {/* Content Rendering Grid */}
-      <div className="space-y-12">
+      <div className="space-y-8">
         {/* Render Aggregated TV Shows (Series) */}
         {filteredContent.showsList.length > 0 && (
           <section className="space-y-4">

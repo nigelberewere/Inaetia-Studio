@@ -121,7 +121,7 @@ export default function Radio() {
   const libraryFolderStreams = stations.filter((s) => s.type === "folder" || !!s.sourceFolder);
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-6 select-none">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-cinema-border pb-5">
         <div>

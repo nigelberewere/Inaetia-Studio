@@ -94,7 +94,7 @@ export default function Home() {
   }
 
   return (
-    <div className="space-y-12 pb-24" id="home-view-page">
+    <div className="space-y-8 pb-24" id="home-view-page">
       {/* Cinematic Hero */}
       <Hero movies={featuredMovies} recommendations={recommendations} />
 
