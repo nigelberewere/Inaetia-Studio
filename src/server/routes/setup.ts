@@ -44,6 +44,22 @@ export function getServerIpAddress() {
   return "localhost";
 }
 
+export function getHostOsName(platform = process.platform): string {
+  if (platform === "darwin") return "macOS";
+  if (platform === "win32") return "Windows";
+  if (platform !== "linux") return "Unknown";
+
+  try {
+    const releaseInfo = fs.readFileSync("/etc/os-release", "utf8");
+    const prettyName = releaseInfo.match(/^PRETTY_NAME=(.*)$/m)?.[1]
+      ?.replace(/^"|"$/g, "")
+      .trim();
+    return prettyName || "Linux";
+  } catch {
+    return "Linux";
+  }
+}
+
 // GET /api/search?q=query
 router.get("/api/search", async (req, res) => {
   try {
@@ -105,17 +121,12 @@ router.get("/api/status", async (req, res) => {
         }
       }
 
-      const platform = process.platform;
-      let osName = "Linux";
-      if (platform === "darwin") osName = "macOS";
-      else if (platform === "win32") osName = "Windows";
-
       res.json({
         uptime: Math.round(process.uptime()),
         storage: { total, used, free },
         movies: moviesCache.length,
         music: musicCache.length,
-        os: osName,
+        os: getHostOsName(),
         serverIp: getServerIpAddress(),
         videosPath: VIDEOS_PATH || "media/Videos",
         musicPath: MUSIC_PATH || "media/Music",
@@ -187,15 +198,9 @@ router.post("/api/thumbnails/clear", async (req, res) => {
 router.get("/api/setup/status", (req, res) => {
   const setupComplete = process.env.SETUP_COMPLETE === "true";
 
-  const platform = process.platform;
-  let osName = "Unknown";
-  if (platform === "linux") osName = "Linux";
-  else if (platform === "darwin") osName = "macOS";
-  else if (platform === "win32") osName = "Windows";
-
   res.json({
     setupComplete,
-    os: osName,
+    os: getHostOsName(),
     nodeVersion: process.version,
     ffmpegDetected: ffmpegInstalledCached,
     themeColor: process.env.THEME_COLOR || "#F5A623",
