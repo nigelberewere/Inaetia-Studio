@@ -201,7 +201,22 @@ systemctl restart inaetia-studios.service
 success "Systemd service is running"
 
 # Get dynamic Server IP
-SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
+SERVER_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '
+  /src/ {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "src") {
+        print $(i + 1)
+        exit
+      }
+    }
+  }
+')
+if [ -z "$SERVER_IP" ]; then
+  SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+fi
+if [ -z "$SERVER_IP" ]; then
+  SERVER_IP="localhost"
+fi
 
 printf '\n%b\n' "${GREEN}${BOLD}  ██████╗  ██████╗ ███╗   ██╗███████╗${RESET}"
 printf '%b\n' "${GREEN}${BOLD}  ██╔══██╗██╔═══██╗████╗  ██║██╔════╝${RESET}"

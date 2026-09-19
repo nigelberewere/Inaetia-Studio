@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { execFile } from "child_process";
+import { execFile, execFileSync } from "child_process";
 import {
   moviesCache,
   musicCache,
@@ -33,6 +33,20 @@ execFile("ffmpeg", ["-version"], (err) => {
 });
 
 export function getServerIpAddress() {
+  if (process.platform === "linux") {
+    try {
+      const route = execFileSync("ip", ["route", "get", "1.1.1.1"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      const sourceIndex = route.trim().split(/\s+/).indexOf("src");
+      const routedAddress = sourceIndex >= 0 ? route.trim().split(/\s+/)[sourceIndex + 1] : "";
+      if (routedAddress) return routedAddress;
+    } catch {
+      // Fall back to the first non-loopback interface below.
+    }
+  }
+
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const net of interfaces[name] || []) {
