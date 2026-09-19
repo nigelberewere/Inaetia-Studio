@@ -150,8 +150,8 @@ export default function Movies() {
             existing.genres = m.showGenres;
           }
 
-          // Avoid adding duplicate episodes
-          if (!existing.episodes.some((ep) => ep.id === m.id || ep.filepath === m.filepath)) {
+          // Avoid duplicate episodes when a private filepath is available.
+          if (!existing.episodes.some((ep) => ep.id === m.id || (!!ep.filepath && !!m.filepath && ep.filepath === m.filepath))) {
             existing.episodes.push(m);
           }
         }
@@ -768,7 +768,6 @@ export default function Movies() {
                     key={movie.id}
                     onClick={() => setActiveDetailMovie(movie)}
                     className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
-                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
                   >
                     <img
                       src={movie.poster || movie.thumbnail}
