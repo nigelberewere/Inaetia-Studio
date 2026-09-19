@@ -5,34 +5,80 @@
 
 set -e
 
-echo "===================================================="
-echo "🎬 Starting Inaetia Studios Installation..."
-echo "===================================================="
+if [ -t 1 ]; then
+  RESET='\033[0m'
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  CYAN='\033[38;5;81m'
+  BLUE='\033[38;5;45m'
+  GREEN='\033[38;5;82m'
+  YELLOW='\033[38;5;221m'
+  RED='\033[38;5;203m'
+  WHITE='\033[97m'
+else
+  RESET=''
+  BOLD=''
+  DIM=''
+  CYAN=''
+  BLUE=''
+  GREEN=''
+  YELLOW=''
+  RED=''
+  WHITE=''
+fi
+
+banner() {
+  printf '\n%b\n' "${CYAN}${BOLD}  ██╗███╗   ██╗ █████╗ ███████╗████████╗██╗ █████╗\n  ██║████╗  ██║██╔══██╗██╔════╝╚══██╔══╝██║██╔══██╗\n  ██║██╔██╗ ██║███████║█████╗     ██║   ██║███████║\n  ██║██║╚██╗██║██╔══██║██╔══╝     ██║   ██║██╔══██║\n  ██║██║ ╚████║██║  ██║██║        ██║   ██║██║  ██║\n  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝        ╚═╝   ╚═╝╚═╝  ╚═╝${RESET}"
+  printf '%b\n' "${BLUE}  ─────────────────────────────────────────────────────────${RESET}"
+  printf '%b\n\n' "${WHITE}${BOLD}  SELF-HOSTED MEDIA SERVER INSTALLATION${RESET}"
+}
+
+section() {
+  printf '\n%b\n' "${CYAN}${BOLD}  >>> $1${RESET}"
+}
+
+info() {
+  printf '%b\n' "${DIM}  |${RESET} $1"
+}
+
+success() {
+  printf '%b\n' "${GREEN}${BOLD}  [ OK ]${RESET} $1"
+}
+
+warning() {
+  printf '%b\n' "${YELLOW}${BOLD}  [ !! ]${RESET} $1"
+}
+
+banner
+section "INITIALIZING INAETIA STUDIOS"
+info "Preparing your home media server..."
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ Error: Please run this setup script as root (sudo ./setup.sh)"
+  printf '%b\n' "${RED}${BOLD}  [FAIL]${RESET} Run this installer as root: sudo ./setup.sh"
   exit 1
 fi
 
 # Detect actual repository root directory
 INSTALL_DIR=$(pwd)
-echo "📂 Project Directory: $INSTALL_DIR"
+info "Project directory: $INSTALL_DIR"
 
 # Wait for dpkg/apt lock frontends to be released
-echo "⏳ Checking for lock on dpkg/apt frontend..."
+section "CHECKING SYSTEM LOCKS"
+info "Waiting for apt and dpkg to become available..."
 while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
-  echo "Waiting for other apt or unattended-upgrades process to release package locks..."
+  info "Another package process is active. Checking again in 5 seconds..."
   sleep 5
 done
+success "Package manager is ready"
 
 # Install System Dependencies (ffmpeg, node, npm)
-echo "📦 Verifying system packages (ffmpeg, nodejs, npm)..."
+section "VERIFYING SYSTEM DEPENDENCIES"
 if ! command -v ffmpeg &> /dev/null; then
-  echo "Installing ffmpeg..."
+  info "Installing ffmpeg..."
   apt-get update && apt-get install -y ffmpeg
 else
-  echo "✔ ffmpeg is already installed"
+  success "ffmpeg is already installed"
 fi
 
 NODE_UPGRADED=false
@@ -43,17 +89,18 @@ else
 fi
 
 if [ "$NODE_MAJOR" -lt 20 ]; then
-  echo "⚠️ Current Node.js version is v$(node -v 2>/dev/null || echo "0"), which is less than 20. Node.js >= 20 is required."
-  echo "Installing Node.js 22 (LTS) via NodeSource..."
+  warning "Node.js v$(node -v 2>/dev/null || echo "0") is below the required version 20"
+  info "Installing Node.js 22 LTS via NodeSource..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
   NODE_UPGRADED=true
 else
-  echo "✔ Node.js is already installed and compatible ($(node -v))"
+  success "Node.js is ready ($(node -v))"
 fi
 
 # Build Project
-echo "🏗️ Installing dependencies and building production bundle..."
+section "BUILDING PRODUCTION BUNDLE"
+info "Installing dependencies and compiling the application..."
 
 # npm should not run as root when setup was invoked through sudo.
 SERVICE_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
@@ -74,32 +121,35 @@ run_npm() {
 }
 
 if [ "$NODE_UPGRADED" = "true" ]; then
-  echo "Cleaning old node_modules to avoid native binary issues with Node 22..."
+  info "Refreshing dependencies for Node.js 22..."
   rm -rf node_modules
 fi
 
 if [ -d "node_modules" ]; then
-  echo "✔ Existing node_modules found. Building project..."
+  info "Existing dependencies found. Verifying the build..."
   if run_npm run build &>/dev/null; then
-    echo "🚀 Build succeeded!"
+    success "Production bundle is ready"
   else
-    echo "⚠️ Build failed. Repairing dependencies..."
+    warning "Build verification failed. Repairing dependencies..."
     rm -rf node_modules
     run_npm ci --no-audit --no-fund
     run_npm run build
+    success "Dependencies repaired and production bundle is ready"
   fi
 else
-  echo "📦 Installing dependencies..."
+  info "Installing dependencies from the lockfile..."
   if [ -f "package-lock.json" ]; then
     run_npm ci --no-audit --no-fund
   else
     run_npm install --no-audit --no-fund
   fi
   run_npm run build
+  success "Dependencies installed and production bundle is ready"
 fi
 
 # Determine service running user
-echo "👤 Configuring permissions for user '$SERVICE_USER'..."
+section "CONFIGURING MEDIA SERVER"
+info "Assigning project permissions to '$SERVICE_USER'..."
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
 # Load current environment variables if .env exists
@@ -125,7 +175,7 @@ mkdir -p "/tmp/inaetia/thumbs"
 chown -R "$SERVICE_USER:$SERVICE_USER" "/tmp/inaetia"
 
 # Create Systemd Service
-echo "⚙️ Provisioning systemd service at /etc/systemd/system/inaetia-studios.service..."
+info "Provisioning systemd service..."
 cat <<EOF > /etc/systemd/system/inaetia-studios.service
 [Unit]
 Description=Inaetia Studios Self-Hosted Media Streaming Server
@@ -144,17 +194,22 @@ WantedBy=multi-user.target
 EOF
 
 # Reload and Enable Service
-echo "📡 Enabling and starting inaetia-studios service..."
+info "Enabling and starting inaetia-studios.service..."
 systemctl daemon-reload
 systemctl enable inaetia-studios.service
 systemctl restart inaetia-studios.service
+success "Systemd service is running"
 
 # Get dynamic Server IP
 SERVER_IP=$(hostname -I | awk '{print $1}' || echo "localhost")
 
-echo "===================================================="
-echo "🎉 Inaetia Studios Setup Completed Successfully!"
-echo "📡 Access your media server on your local network at:"
-echo "   👉 http://$SERVER_IP:3000"
-echo "   👉 http://localhost:3000"
-echo "===================================================="
+printf '\n%b\n' "${GREEN}${BOLD}  ██████╗  ██████╗ ███╗   ██╗███████╗${RESET}"
+printf '%b\n' "${GREEN}${BOLD}  ██╔══██╗██╔═══██╗████╗  ██║██╔════╝${RESET}"
+printf '%b\n' "${GREEN}${BOLD}  ██████╔╝██║   ██║██╔██╗ ██║█████╗  ${RESET}"
+printf '%b\n' "${GREEN}${BOLD}  ██╔══██╗██║   ██║██║╚██╗██║██╔══╝  ${RESET}"
+printf '%b\n' "${GREEN}${BOLD}  ██████╔╝╚██████╔╝██║ ╚████║███████╗${RESET}"
+printf '%b\n\n' "${GREEN}${BOLD}  ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚══════╝${RESET}"
+printf '%b\n' "${GREEN}${BOLD}  INSTALLATION COMPLETE${RESET}"
+printf '%b\n' "${WHITE}  Your media server is online at:${RESET}"
+printf '%b\n' "${CYAN}${BOLD}  http://$SERVER_IP:3000${RESET}"
+printf '%b\n\n' "${CYAN}  http://localhost:3000${RESET}"
