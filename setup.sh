@@ -55,29 +55,50 @@ fi
 # Build Project
 echo "🏗️ Installing dependencies and building production bundle..."
 
+# npm should not run as root when setup was invoked through sudo.
+SERVICE_USER="${SUDO_USER:-$(logname 2>/dev/null || echo root)}"
+if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+  SERVICE_USER=root
+fi
+
+if [ "$SERVICE_USER" != "root" ]; then
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
+fi
+
+run_npm() {
+  if [ "$SERVICE_USER" = "root" ]; then
+    npm "$@"
+  else
+    runuser -u "$SERVICE_USER" -- env HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)" npm "$@"
+  fi
+}
+
 if [ "$NODE_UPGRADED" = "true" ]; then
   echo "Cleaning old node_modules to avoid native binary issues with Node 22..."
-  rm -rf node_modules package-lock.json
+  rm -rf node_modules
 fi
 
 if [ -d "node_modules" ]; then
   echo "✔ Existing node_modules found. Building project..."
-  if npm run build &>/dev/null; then
+  if run_npm run build &>/dev/null; then
     echo "🚀 Build succeeded!"
   else
     echo "⚠️ Build failed. Repairing dependencies..."
-    rm -rf node_modules package-lock.json
-    npm install
-    npm run build
+    rm -rf node_modules
+    run_npm ci --no-audit --no-fund
+    run_npm run build
   fi
 else
   echo "📦 Installing dependencies..."
-  npm install
-  npm run build
+  if [ -f "package-lock.json" ]; then
+    run_npm ci --no-audit --no-fund
+  else
+    run_npm install --no-audit --no-fund
+  fi
+  run_npm run build
 fi
 
 # Determine service running user
-SERVICE_USER=$(logname || echo "root")
 echo "👤 Configuring permissions for user '$SERVICE_USER'..."
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
