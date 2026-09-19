@@ -215,12 +215,22 @@ export default function Navbar() {
                 setShowDropdown(!showDropdown);
                 setShowConfirmClear(false);
               }}
-              style={{ backgroundColor: currentProfile.color }}
-              className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm select-none shadow-md cursor-pointer hover:brightness-110 active:scale-95 transition-all"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setShowDropdown(!showDropdown);
+                  setShowConfirmClear(false);
+                }
+              }}
+              tabIndex={0}
+              role="button"
+              aria-label={`${currentProfile.name}'s profile menu`}
+              style={{ borderColor: currentProfile.color }}
+              className="w-9 h-9 rounded-full border-2 flex items-center justify-center font-bold text-white text-sm select-none overflow-hidden shadow-md cursor-pointer hover:brightness-110 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cinema-amber"
               title={`${currentProfile.name}'s Profile`}
               id="navbar-profile-avatar"
             >
-              <ProfileAvatar avatar={currentProfile.avatar} className="w-5 h-5 text-white" />
+              <ProfileAvatar avatar={currentProfile.avatar} className="w-full h-full text-white" />
             </div>
 
             {showDropdown && (

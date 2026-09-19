@@ -159,8 +159,8 @@ export default function SetupWizard() {
       const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
       const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
 
-      if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0 || activeOther.length === 0) {
-        setErrorMsg("At least one directory path is required for each category.");
+      if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0) {
+        setErrorMsg("At least one directory path is required for Music, Movies, and TV Shows.");
         return;
       }
 

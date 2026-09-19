@@ -236,8 +236,8 @@ export default function Settings() {
     const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
     const activeExcludes = excludePaths.filter(p => p.trim() !== "");
 
-    if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0 || activeOther.length === 0) {
-      setSaveDirsError("At least one directory path is required for each category.");
+    if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0) {
+      setSaveDirsError("At least one directory path is required for Music, Movies, and TV Shows.");
       setSavingDirs(false);
       return;
     }
