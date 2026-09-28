@@ -12,7 +12,7 @@ import { Movie } from "../types";
 import { formatDuration, formatSize, formatCleanDate, normalizeSeriesName, pluralize } from "../utils";
 import { Badge } from "../components/common/Badge";
 
-type ContentTypeFilter = "all" | "movies" | "tvshows" | "videos";
+type ContentTypeFilter = "all" | "movies" | "tvshows";
 type CollectionFilter = "all" | "marvel" | "cartoons" | string;
 type ViewMode = "poster" | "landscape" | "list";
 type SortOption = "recent" | "title" | "rating" | "duration" | "size";
@@ -256,24 +256,6 @@ export default function Movies() {
       showsList = [];
     } else if (contentTypeFilter === "tvshows") {
       moviesList = [];
-    } else if (contentTypeFilter === "videos") {
-      moviesList = [];
-      showsList = [];
-      movies.forEach((m) => {
-        if (m.category === "Videos" || m.type === "video") {
-          const sub = m.subcategory || "Other Videos";
-          if (!videosBySubcategory[sub]) videosBySubcategory[sub] = [];
-          videosBySubcategory[sub].push(m);
-        }
-      });
-    } else { // "all"
-      movies.forEach((m) => {
-        if (m.category === "Videos" || m.type === "video") {
-          const sub = m.subcategory || "Other Videos";
-          if (!videosBySubcategory[sub]) videosBySubcategory[sub] = [];
-          videosBySubcategory[sub].push(m);
-        }
-      });
     }
 
     // 2. Collection / Genre Filter
@@ -290,13 +272,6 @@ export default function Movies() {
 
       moviesList = moviesList.filter((m) => matchCollection(m.genres, m.category));
       showsList = showsList.filter((s) => matchCollection(s.genres, s.category));
-
-      Object.keys(videosBySubcategory).forEach((sub) => {
-        videosBySubcategory[sub] = videosBySubcategory[sub].filter((v) => matchCollection(v.genres, v.category));
-        if (videosBySubcategory[sub].length === 0) {
-          delete videosBySubcategory[sub];
-        }
-      });
     }
 
     // 3. Decade Filter
@@ -348,7 +323,7 @@ export default function Movies() {
       return b.episodes.length - a.episodes.length;
     });
 
-    return { moviesList, showsList, videosBySubcategory };
+    return { moviesList, showsList };
   }, [contentTypeFilter, collectionFilter, movies, shows, decadeFilter, formatFilter, sortBy]);
 
   const handleOpenShow = (showName: string) => {
@@ -376,7 +351,7 @@ export default function Movies() {
             Media Library
           </h1>
           <p className="text-cinema-muted text-sm mt-1">
-            Browse movies, TV series, animated shows, and videos.
+            Browse movies, TV series, and animated shows.
           </p>
         </div>
 
@@ -404,8 +379,7 @@ export default function Movies() {
               [
                 { id: "all", label: "All Media", icon: Folder },
                 { id: "movies", label: "Movies", icon: Clapperboard },
-                { id: "tvshows", label: "TV Shows", icon: Tv },
-                { id: "videos", label: "Videos & Clips", icon: Film }
+                { id: "tvshows", label: "TV Shows", icon: Tv }
               ] as const
             ).map((tab) => {
               const Icon = tab.icon;
@@ -805,111 +779,9 @@ export default function Movies() {
             )}
           </section>
         )}
-
-        {/* Render Custom Videos Subcategories (Clips, Music Videos, Local dramas etc.) */}
-        {Object.entries(filteredContent.videosBySubcategory).map(([sub, list]) => {
-          const videoList = list as Movie[];
-          return (
-            <section key={sub} className="space-y-4">
-              <h2 className="text-lg md:text-xl font-black text-white flex items-center gap-2 border-l-4 border-cinema-amber pl-3 capitalize">
-                <Film className="w-5 h-5 text-cinema-amber" />
-                {sub} ({videoList.length})
-              </h2>
-
-              {viewMode === "poster" && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4 sm:gap-5 md:gap-6">
-                  {videoList.map((video) => (
-                    <MovieCard 
-                      key={video.id} 
-                      movie={video} 
-                      onClick={() => setActiveDetailMovie(video)}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {viewMode === "landscape" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
-                  {videoList.map((video) => (
-                    <div
-                      key={video.id}
-                      onClick={() => setActiveDetailMovie(video)}
-                      className="group relative aspect-[16/9] rounded-2xl overflow-hidden bg-black/40 border border-white/10 hover:border-cinema-amber cursor-pointer platform-card shadow-xl flex flex-col justify-end p-4"
-                    >
-                      <img
-                        src={video.fanart || video.thumbnail || `/api/artwork/${video.id}/poster`}
-                        alt={video.title}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                      <div className="relative z-10 space-y-1">
-                        <Badge variant="amber" size="sm">
-                          {video.extension.replace(".", "")}
-                        </Badge>
-                        <h3 className="font-extrabold text-lg text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
-                          {video.title}
-                        </h3>
-                        <div className="flex items-center gap-3 text-xs text-cinema-muted">
-                          {video.duration > 0 && <span>{formatDuration(video.duration)}</span>}
-                          {video.size > 0 && <span>• {formatSize(video.size)}</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {viewMode === "list" && (
-                <div className="space-y-3">
-                  {videoList.map((video) => (
-                    <div
-                      key={video.id}
-                      onClick={() => setActiveDetailMovie(video)}
-                      className="group flex items-center gap-4 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-cinema-amber hover:bg-white/10 transition-all cursor-pointer backdrop-blur-md platform-card"
-                    >
-                      <img
-                        src={video.poster || video.thumbnail}
-                        alt={video.title}
-                        className="w-16 h-20 object-cover rounded-xl border border-white/10 shrink-0"
-                      />
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <h3 className="font-extrabold text-base text-white line-clamp-2 break-words leading-snug group-hover:text-cinema-amber transition-colors">
-                          {video.title}
-                        </h3>
-                        <p className="text-xs text-cinema-muted line-clamp-1">
-                          {video.plot || video.tagline || video.filename}
-                        </p>
-                        <div className="flex items-center gap-3 text-xs text-cinema-muted">
-                          <span className="px-1.5 py-0.5 bg-white/10 text-white rounded text-[10px] font-bold uppercase">
-                            {video.extension.replace(".", "")}
-                          </span>
-                          {video.duration > 0 && <span>{formatDuration(video.duration)}</span>}
-                          {video.size > 0 && <span>{formatSize(video.size)}</span>}
-                        </div>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCurrentVideo(video);
-                        }}
-                        className="p-3 rounded-xl bg-cinema-amber text-cinema-bg font-bold hover:scale-105 transition-all cursor-pointer shrink-0"
-                        title="Play Immediately"
-                      >
-                        <Play className="w-4 h-4 fill-cinema-bg" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          );
-        })}
-
         {/* Zero Results Placeholder */}
         {filteredContent.moviesList.length === 0 &&
-          filteredContent.showsList.length === 0 &&
-          Object.keys(filteredContent.videosBySubcategory).length === 0 && (
+          filteredContent.showsList.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 text-center bg-cinema-card border border-cinema-border rounded-2xl p-8 max-w-lg mx-auto">
               <div className="p-4 rounded-full bg-white/5 border border-cinema-border mb-2 text-cinema-muted">
                 <Film className="w-8 h-8" />

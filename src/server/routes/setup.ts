@@ -443,14 +443,14 @@ router.post("/api/settings/save-directories", async (req, res) => {
 
   const { musicPaths, moviesPaths, tvShowsPaths, otherVideosPaths, excludePaths } = req.body;
 
-  if (!musicPaths || !moviesPaths || !tvShowsPaths || !otherVideosPaths) {
-    return res.status(400).json({ error: "All library directory path arrays are required" });
+  if (!musicPaths || !moviesPaths || !tvShowsPaths) {
+    return res.status(400).json({ error: "Music, Movies, and TV Shows directory path arrays are required" });
   }
 
   const rawMusic = Array.isArray(musicPaths) ? musicPaths : [musicPaths];
   const rawMovies = Array.isArray(moviesPaths) ? moviesPaths : [moviesPaths];
   const rawTvShows = Array.isArray(tvShowsPaths) ? tvShowsPaths : [tvShowsPaths];
-  const rawOtherVideos = Array.isArray(otherVideosPaths) ? otherVideosPaths : [otherVideosPaths];
+  const rawOtherVideos = Array.isArray(otherVideosPaths) ? otherVideosPaths : otherVideosPaths ? [otherVideosPaths] : [];
   const rawExcludes = Array.isArray(excludePaths) ? excludePaths : typeof excludePaths === "string" && excludePaths.trim() ? [excludePaths] : [];
 
   const allPaths = [...rawMusic, ...rawMovies, ...rawTvShows, ...rawOtherVideos, ...rawExcludes];

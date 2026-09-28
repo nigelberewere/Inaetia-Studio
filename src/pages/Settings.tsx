@@ -58,13 +58,7 @@ export default function Settings() {
     }
     return ["media/Videos/Tv Shows"];
   });
-  const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>(() => {
-    if (status) {
-      if (status.otherVideosPaths) return status.otherVideosPaths.split(",");
-      if (status.videosPath) return [status.videosPath];
-    }
-    return ["media/Videos"];
-  });
+
   const [excludePaths, setExcludePaths] = useState<string[]>(() => {
     if (status && status.excludePaths) {
       return status.excludePaths.split(",").filter(Boolean);
@@ -140,13 +134,7 @@ export default function Settings() {
         setTvShowsPaths(["media/Videos/Tv Shows"]);
       }
 
-      if (status.otherVideosPaths) {
-        setOtherVideosPaths(status.otherVideosPaths.split(","));
-      } else if (status.videosPath) {
-        setOtherVideosPaths([status.videosPath]);
-      } else {
-        setOtherVideosPaths(["media/Videos"]);
-      }
+
 
       if (status.excludePaths) {
         setExcludePaths(status.excludePaths.split(",").filter(Boolean));
@@ -233,7 +221,6 @@ export default function Settings() {
     const activeMusic = musicPaths.filter(p => p.trim() !== "");
     const activeMovies = moviesPaths.filter(p => p.trim() !== "");
     const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
-    const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
     const activeExcludes = excludePaths.filter(p => p.trim() !== "");
 
     if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0) {
@@ -250,7 +237,7 @@ export default function Settings() {
           musicPaths: activeMusic,
           moviesPaths: activeMovies,
           tvShowsPaths: activeTv,
-          otherVideosPaths: activeOther,
+          otherVideosPaths: [],
           excludePaths: activeExcludes
         })
       });
@@ -544,7 +531,6 @@ export default function Settings() {
             {renderPathInputsSection("Music Directories", musicPaths, setMusicPaths, "music")}
             {renderPathInputsSection("Movies Directories", moviesPaths, setMoviesPaths, "videos")}
             {renderPathInputsSection("TV Shows Directories", tvShowsPaths, setTvShowsPaths, "videos")}
-            {renderPathInputsSection("Other Videos Directories", otherVideosPaths, setOtherVideosPaths, "videos")}
             {renderPathInputsSection("Excluded Folders", excludePaths, setExcludePaths, "all", true)}
           </div>
 

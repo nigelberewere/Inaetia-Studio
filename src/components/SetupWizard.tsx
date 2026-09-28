@@ -47,7 +47,6 @@ export default function SetupWizard() {
   const [musicPaths, setMusicPaths] = useState<string[]>(["media/Music"]);
   const [moviesPaths, setMoviesPaths] = useState<string[]>(["media/Videos/Movies"]);
   const [tvShowsPaths, setTvShowsPaths] = useState<string[]>(["media/Videos/Tv Shows"]);
-  const [otherVideosPaths, setOtherVideosPaths] = useState<string[]>(["media/Videos"]);
   const [excludePaths, setExcludePaths] = useState<string[]>([]);
 
   // Directory Explorer Modal State
@@ -103,12 +102,6 @@ export default function SetupWizard() {
             setTvShowsPaths([data.videosPath + "/Tv Shows"]);
           }
 
-          if (data.otherVideosPaths) {
-            setOtherVideosPaths(data.otherVideosPaths.split(","));
-          } else if (data.videosPath) {
-            setOtherVideosPaths([data.videosPath]);
-          }
-
           if (data.excludePaths) {
             setExcludePaths(data.excludePaths.split(",").filter(Boolean));
           }
@@ -157,7 +150,6 @@ export default function SetupWizard() {
       const activeMusic = musicPaths.filter(p => p.trim() !== "");
       const activeMovies = moviesPaths.filter(p => p.trim() !== "");
       const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
-      const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
 
       if (activeMusic.length === 0 || activeMovies.length === 0 || activeTv.length === 0) {
         setErrorMsg("At least one directory path is required for Music, Movies, and TV Shows.");
@@ -170,19 +162,16 @@ export default function SetupWizard() {
         const musicValidations = await Promise.all(activeMusic.map(p => validatePath(p, "music")));
         const moviesValidations = await Promise.all(activeMovies.map(p => validatePath(p, "videos")));
         const tvShowsValidations = await Promise.all(activeTv.map(p => validatePath(p, "videos")));
-        const otherVideosValidations = await Promise.all(activeOther.map(p => validatePath(p, "videos")));
 
         const invalidMusic = activeMusic.filter((_, i) => !musicValidations[i].exists);
         const invalidMovies = activeMovies.filter((_, i) => !moviesValidations[i].exists);
         const invalidTv = activeTv.filter((_, i) => !tvShowsValidations[i].exists);
-        const invalidOther = activeOther.filter((_, i) => !otherVideosValidations[i].exists);
 
-        if (invalidMusic.length > 0 || invalidMovies.length > 0 || invalidTv.length > 0 || invalidOther.length > 0) {
+        if (invalidMusic.length > 0 || invalidMovies.length > 0 || invalidTv.length > 0) {
           let error = "The following directories were not found on the server:\n";
           if (invalidMusic.length > 0) error += `• Music: ${invalidMusic.join(", ")}\n`;
           if (invalidMovies.length > 0) error += `• Movies: ${invalidMovies.join(", ")}\n`;
           if (invalidTv.length > 0) error += `• TV Shows: ${invalidTv.join(", ")}\n`;
-          if (invalidOther.length > 0) error += `• Other Videos: ${invalidOther.join(", ")}\n`;
           error += "Please verify that the paths exist on your host system.";
           setErrorMsg(error);
           setLoading(false);
@@ -217,7 +206,6 @@ export default function SetupWizard() {
     const activeMusic = musicPaths.filter(p => p.trim() !== "");
     const activeMovies = moviesPaths.filter(p => p.trim() !== "");
     const activeTv = tvShowsPaths.filter(p => p.trim() !== "");
-    const activeOther = otherVideosPaths.filter(p => p.trim() !== "");
     const activeExcludes = excludePaths.filter(p => p.trim() !== "");
 
     try {
@@ -228,7 +216,7 @@ export default function SetupWizard() {
           musicPaths: activeMusic,
           moviesPaths: activeMovies,
           tvShowsPaths: activeTv,
-          otherVideosPaths: activeOther,
+          otherVideosPaths: [],
           excludePaths: activeExcludes,
           performanceProfile: perfProfile,
           themeColor: selectedColor,
@@ -632,15 +620,6 @@ export default function SetupWizard() {
                         setTvShowsPaths,
                         "videos",
                         "Files will be grouped into TV Series, seasons, and episodes"
-                      )}
-
-                      {/* Other Videos Category */}
-                      {renderPathCategoryInputs(
-                        "Other Videos Directories",
-                        otherVideosPaths,
-                        setOtherVideosPaths,
-                        "videos",
-                        "Miscellaneous movies, home videos, clips, or sub-channel media"
                       )}
 
                       {/* Exclude Folders Category */}
