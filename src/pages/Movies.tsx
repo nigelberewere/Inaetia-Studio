@@ -334,60 +334,30 @@ export default function Movies() {
 
   return (
     <div className="space-y-4 pb-20 animate-fade-in" id="movies-library-page">
-      {/* Collections & Genres Filter Bar with Refresh Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" id="collection-filters-container">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 w-full max-w-full scrollbar-none" id="collection-tabs-list">
-          <button
-            onClick={() => setCollectionFilter("all")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-              collectionFilter === "all"
-                ? "bg-white/20 text-white border-white/30"
-                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-            }`}
-          >
-            All Collections
-          </button>
-          <button
-            onClick={() => setCollectionFilter("cartoons")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-              collectionFilter === "cartoons"
-                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
-                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <Video className="w-3 h-3 text-purple-400" /> Cartoons & Animation
-          </button>
-          {availableGenres.map((genre) => (
-            <button
-              key={genre}
-              onClick={() => setCollectionFilter(genre)}
-              className={`px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-                collectionFilter === genre
-                  ? "bg-cinema-amber/20 text-cinema-amber border-cinema-amber/40"
-                  : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-              }`}
+      {/* Unified Filter, Genre & Sorting Toolbar */}
+      <div className="p-3 rounded-2xl glass-panel border border-white/10 flex flex-wrap items-center justify-between gap-3" id="movies-toolbar">
+        {/* Left Controls: Genre, Sort, Era, Format */}
+        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+          {/* Genre / Collection Selection */}
+          <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl">
+            <Tag className="w-3.5 h-3.5 text-cinema-amber" />
+            <span className="text-cinema-muted font-medium">Genre:</span>
+            <select
+              value={collectionFilter}
+              onChange={(e) => setCollectionFilter(e.target.value)}
+              className="bg-transparent text-white font-bold cursor-pointer focus:outline-none"
+              id="select-genre-filter"
             >
-              {genre}
-            </button>
-          ))}
-        </div>
+              <option value="all" className="bg-zinc-900 text-white">All Genres</option>
+              <option value="cartoons" className="bg-zinc-900 text-white">Cartoons & Animation</option>
+              {availableGenres.map((genre) => (
+                <option key={genre} value={genre} className="bg-zinc-900 text-white">
+                  {genre}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Manual Rescan Trigger */}
-        <button
-          onClick={triggerRescan}
-          className="self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-all text-xs font-semibold shrink-0 cursor-pointer"
-          title="Reload Library Filesystem"
-          id="btn-movies-reload"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh Library
-        </button>
-      </div>
-
-      {/* Advanced Filter & Sorting Toolbar */}
-      <div className="p-3 rounded-2xl glass-panel border border-white/10 flex flex-wrap items-center justify-between gap-3">
-        {/* Left Controls: Filter Badges & Sorting */}
-        <div className="flex flex-wrap items-center gap-3 text-xs">
           {/* Sort Selection */}
           <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl">
             <ArrowUpDown className="w-3.5 h-3.5 text-cinema-amber" />
@@ -396,6 +366,7 @@ export default function Movies() {
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
               className="bg-transparent text-white font-bold cursor-pointer focus:outline-none"
+              id="select-sort-filter"
             >
               <option value="recent" className="bg-zinc-900 text-white">Recently Added</option>
               <option value="title" className="bg-zinc-900 text-white">Title (A-Z)</option>
@@ -405,7 +376,7 @@ export default function Movies() {
             </select>
           </div>
 
-          {/* Decade Filter */}
+          {/* Decade / Era Filter */}
           <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 px-3 py-1.5 rounded-xl">
             <Calendar className="w-3.5 h-3.5 text-cinema-amber" />
             <span className="text-cinema-muted font-medium">Era:</span>
@@ -413,6 +384,7 @@ export default function Movies() {
               value={decadeFilter}
               onChange={(e) => setDecadeFilter(e.target.value as DecadeFilter)}
               className="bg-transparent text-white font-bold cursor-pointer focus:outline-none"
+              id="select-era-filter"
             >
               <option value="all" className="bg-zinc-900 text-white">All Years</option>
               <option value="2020s" className="bg-zinc-900 text-white">2020s</option>
@@ -430,6 +402,7 @@ export default function Movies() {
               value={formatFilter}
               onChange={(e) => setFormatFilter(e.target.value as FormatFilter)}
               className="bg-transparent text-white font-bold cursor-pointer focus:outline-none"
+              id="select-format-filter"
             >
               <option value="all" className="bg-zinc-900 text-white">All Formats</option>
               <option value="mkv" className="bg-zinc-900 text-white">MKV Container</option>
@@ -439,38 +412,50 @@ export default function Movies() {
           </div>
         </div>
 
-        {/* Right Controls: Grid/Layout View Mode Toggles */}
-        <div className="flex items-center gap-1 bg-black/40 border border-white/10 p-1 rounded-xl" id="viewmode-toggle-group">
+        {/* Right Controls: Refresh Button & Grid/Layout View Mode Toggles */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => changeViewMode("poster")}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${
-              viewMode === "poster" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
-            }`}
-            title="Poster Grid View"
-            id="btn-viewmode-poster"
+            onClick={triggerRescan}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 hover:bg-white/10 text-cinema-muted hover:text-white transition-all text-xs font-semibold shrink-0 cursor-pointer"
+            title="Reload Library Filesystem"
+            id="btn-movies-reload"
           >
-            <LayoutGrid className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5 text-cinema-amber" />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
-          <button
-            onClick={() => changeViewMode("landscape")}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${
-              viewMode === "landscape" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
-            }`}
-            title="Landscape Card View"
-            id="btn-viewmode-landscape"
-          >
-            <Columns className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => changeViewMode("list")}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${
-              viewMode === "list" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
-            }`}
-            title="Detailed List View"
-            id="btn-viewmode-list"
-          >
-            <List className="w-4 h-4" />
-          </button>
+
+          <div className="flex items-center gap-1 bg-black/40 border border-white/10 p-1 rounded-xl" id="viewmode-toggle-group">
+            <button
+              onClick={() => changeViewMode("poster")}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "poster" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
+              }`}
+              title="Poster Grid View"
+              id="btn-viewmode-poster"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => changeViewMode("landscape")}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "landscape" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
+              }`}
+              title="Landscape Card View"
+              id="btn-viewmode-landscape"
+            >
+              <Columns className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => changeViewMode("list")}
+              className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                viewMode === "list" ? "bg-cinema-amber text-cinema-bg font-bold shadow-md" : "text-cinema-muted hover:text-white"
+              }`}
+              title="Detailed List View"
+              id="btn-viewmode-list"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
