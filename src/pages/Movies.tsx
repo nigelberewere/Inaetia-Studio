@@ -4,7 +4,7 @@ import MovieCard from "../components/MovieCard";
 import MovieDetailModal from "../components/MovieDetailModal";
 import TVShowDetailModal from "../components/TVShowDetailModal";
 import { 
-  Film, Tv, Shield, Folder, Play, Clock, HardDrive, 
+  Film, Tv, Folder, Play, Clock, HardDrive, 
   ChevronRight, RefreshCw, X, Clapperboard, Video,
   LayoutGrid, List, Columns, Calendar, ArrowUpDown, Disc, Tag, Layers
 } from "lucide-react";
@@ -12,7 +12,7 @@ import { Movie } from "../types";
 import { formatDuration, formatSize, formatCleanDate, normalizeSeriesName, pluralize } from "../utils";
 import { Badge } from "../components/common/Badge";
 
-type CollectionFilter = "all" | "marvel" | "cartoons" | string;
+type CollectionFilter = "all" | "cartoons" | string;
 type ViewMode = "poster" | "landscape" | "list";
 type SortOption = "recent" | "title" | "rating" | "duration" | "size";
 type DecadeFilter = "all" | "2020s" | "2010s" | "2000s" | "older";
@@ -255,9 +255,6 @@ export default function Movies() {
     // 2. Collection / Genre Filter
     if (collectionFilter !== "all") {
       const matchCollection = (genres?: string[], category?: string) => {
-        if (collectionFilter === "marvel") {
-          return category === "Marvel Movies" || genres?.some((g) => /marvel/i.test(g));
-        }
         if (collectionFilter === "cartoons") {
           return category === "Cartoons" || genres?.some((g) => /cartoon|animation/i.test(g));
         }
@@ -349,16 +346,6 @@ export default function Movies() {
             }`}
           >
             All Collections
-          </button>
-          <button
-            onClick={() => setCollectionFilter("marvel")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-              collectionFilter === "marvel"
-                ? "bg-red-500/20 text-red-400 border-red-500/40"
-                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <Shield className="w-3 h-3 text-red-400" /> Marvel Universe
           </button>
           <button
             onClick={() => setCollectionFilter("cartoons")}
