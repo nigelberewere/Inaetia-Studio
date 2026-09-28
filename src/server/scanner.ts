@@ -520,6 +520,7 @@ export async function scanAllLibraries() {
       let showRating: number | null = null;
       let showGenres: string[] = [];
       let showStudio: string | null = null;
+      let showTags: string[] = [];
 
       if (isTvShow) {
         if (tvShowNfoPath) {
@@ -533,6 +534,7 @@ export async function scanAllLibraries() {
             showRating = parsedShow.rating;
             showGenres = parsedShow.genres;
             showStudio = parsedShow.studio;
+            showTags = parsedShow.tags || [];
           }
           const showDir = path.dirname(tvShowNfoPath);
           if (fs.existsSync(showDir)) {
@@ -598,9 +600,14 @@ export async function scanAllLibraries() {
         tagline: nfo ? nfo.tagline : null,
         genres: nfo ? nfo.genres : [],
         studio: nfo ? nfo.studio : null,
+        studios: nfo?.studios || (nfo?.studio ? [nfo.studio] : []),
         director: nfo ? nfo.director : null,
+        directors: nfo?.directors || (nfo?.director ? [nfo.director] : []),
+        writers: nfo?.writers || [],
         actors: nfo ? nfo.actors : [],
         trailer: nfo ? nfo.trailer : null,
+        set: nfo?.set || null,
+        tags: nfo?.tags || [],
         poster,
         fanart,
         thumb,
@@ -620,6 +627,7 @@ export async function scanAllLibraries() {
         showRating,
         showGenres,
         showStudio,
+        showTags,
         metadataSource: nfo ? "nfo" : "filename",
         hasRichMetadata: !!nfo,
         category,

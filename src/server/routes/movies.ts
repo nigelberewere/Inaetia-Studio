@@ -15,6 +15,7 @@ import { checkCache } from "../scanner";
 import { findArtwork, parseTvShowNfo } from "../../nfoReader";
 import { ShowGroup } from "../../types";
 import { normalizeSeriesName } from "../../utils";
+import { getSimilarMovies } from "../../recommendationEngine";
 
 const router = express.Router();
 
@@ -152,6 +153,27 @@ router.get("/api/movies/:id", async (req, res) => {
     res.json(sanitizeMovieForClient(movie));
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch movie", details: err.message });
+  }
+});
+
+// GET /api/movies/:id/similar
+router.get("/api/movies/:id/similar", async (req, res) => {
+  try {
+    await checkCache();
+    const id = req.params.id;
+    const movie = moviesCache.find((m) => m.id === id);
+    if (!movie) {
+      return res.status(404).json({ error: "Movie not found" });
+    }
+    const limit = parseInt(req.query.limit as string, 10) || 6;
+    const recommendations = getSimilarMovies(movie, moviesCache, limit);
+    const safeRecs = recommendations.map((r) => ({
+      ...r,
+      movie: sanitizeMovieForClient(r.movie),
+    }));
+    res.json(safeRecs);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to generate movie recommendations", details: err.message });
   }
 });
 

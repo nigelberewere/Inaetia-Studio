@@ -15,9 +15,14 @@ export interface MovieMetadata {
   tagline: string | null;
   genres: string[];
   studio: string | null;
+  studios?: string[];
   director: string | null;
+  directors?: string[];
+  writers?: string[];
   actors: Array<{ name: string; role: string }>;
   trailer: string | null;
+  set?: string | null;
+  tags?: string[];
   aired?: string | null;
   season?: number | null;
   episode?: number | null;
@@ -33,6 +38,9 @@ export interface TvShowMetadata {
   plot: string | null;
   genres: string[];
   studio: string | null;
+  studios?: string[];
+  tags?: string[];
+  actors?: Array<{ name: string; role: string }>;
 }
 
 // Simple helper to normalize things to array
@@ -64,6 +72,261 @@ function extractStringFromXmlTag(tagValue: any): string | null {
   return null;
 }
 
+export function extractSetName(root: any): string | null {
+  if (!root) return null;
+  const checkVal = (v: any): string | null => {
+    if (!v) return null;
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    if (typeof v === "object") {
+      if (v.name) {
+        const str = extractStringFromXmlTag(v.name);
+        if (str) return str;
+      }
+      return extractStringFromXmlTag(v);
+    }
+    return null;
+  };
+
+  if (root.set) {
+    if (Array.isArray(root.set)) {
+      for (const item of root.set) {
+        const found = checkVal(item);
+        if (found) return found;
+      }
+    } else {
+      const found = checkVal(root.set);
+      if (found) return found;
+    }
+  }
+
+  if (root.collection) {
+    const found = checkVal(root.collection);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+export function extractTags(root: any): string[] {
+  if (!root) return [];
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (val: any) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const str = extractStringFromXmlTag(val);
+    if (str) {
+      const parts = str.includes(",") || str.includes(";") ? str.split(/[,;]/) : [str];
+      for (const part of parts) {
+        const clean = part.trim();
+        const norm = clean.toLowerCase();
+        if (clean && !seen.has(norm)) {
+          seen.add(norm);
+          tags.push(clean);
+        }
+      }
+    }
+  };
+
+  if (root.tag) add(root.tag);
+  if (root.tags) {
+    if (root.tags.tag) add(root.tags.tag);
+    else add(root.tags);
+  }
+  if (root.keyword) add(root.keyword);
+  if (root.keywords) {
+    if (root.keywords.keyword) add(root.keywords.keyword);
+    else add(root.keywords);
+  }
+
+  return tags;
+}
+
+export function extractDirectors(root: any): string[] {
+  if (!root) return [];
+  const directors: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (val: any) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const str = extractStringFromXmlTag(val);
+    if (str) {
+      const parts = str.includes("/") || str.includes(",") ? str.split(/[/,]/) : [str];
+      for (const part of parts) {
+        const clean = part.trim();
+        const norm = clean.toLowerCase();
+        if (clean && !seen.has(norm)) {
+          seen.add(norm);
+          directors.push(clean);
+        }
+      }
+    }
+  };
+
+  if (root.director) add(root.director);
+  return directors;
+}
+
+export function extractWriters(root: any): string[] {
+  if (!root) return [];
+  const writers: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (val: any) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const str = extractStringFromXmlTag(val);
+    if (str) {
+      const parts = str.includes("/") || str.includes(",") ? str.split(/[/,]/) : [str];
+      for (const part of parts) {
+        const clean = part.trim();
+        const norm = clean.toLowerCase();
+        if (clean && !seen.has(norm)) {
+          seen.add(norm);
+          writers.push(clean);
+        }
+      }
+    }
+  };
+
+  if (root.credits) add(root.credits);
+  if (root.writer) add(root.writer);
+  return writers;
+}
+
+export function extractStudios(root: any): string[] {
+  if (!root) return [];
+  const studios: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (val: any) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const str = extractStringFromXmlTag(val);
+    if (str) {
+      const parts = str.includes("/") || str.includes(",") ? str.split(/[/,]/) : [str];
+      for (const part of parts) {
+        const clean = part.trim();
+        const norm = clean.toLowerCase();
+        if (clean && !seen.has(norm)) {
+          seen.add(norm);
+          studios.push(clean);
+        }
+      }
+    }
+  };
+
+  if (root.studio) add(root.studio);
+  return studios;
+}
+
+export function extractGenres(root: any): string[] {
+  if (!root) return [];
+  const genres: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (val: any) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const str = extractStringFromXmlTag(val);
+    if (str) {
+      const parts = str.includes("/") || str.includes(",") ? str.split(/[/,]/) : [str];
+      for (const part of parts) {
+        const clean = part.trim();
+        const norm = clean.toLowerCase();
+        if (clean && !seen.has(norm)) {
+          seen.add(norm);
+          genres.push(clean);
+        }
+      }
+    }
+  };
+
+  if (root.genre) add(root.genre);
+  return genres;
+}
+
+export function extractRatingsAndVotes(root: any): { rating: number | null; votes: number | null } {
+  let rating: number | null = null;
+  let votes: number | null = null;
+
+  if (root.rating !== undefined && root.rating !== null) {
+    const parsed = parseFloat(String(extractStringFromXmlTag(root.rating) || root.rating));
+    if (!isNaN(parsed) && parsed > 0) rating = parsed;
+  }
+
+  if (root.votes !== undefined && root.votes !== null) {
+    const parsed = parseInt(String(extractStringFromXmlTag(root.votes) || root.votes), 10);
+    if (!isNaN(parsed) && parsed > 0) votes = parsed;
+  }
+
+  // Modern TMM / Kodi <ratings><rating default="true" name="imdb"><value>8.5</value><votes>...</votes></rating></ratings>
+  if ((rating === null || votes === null) && root.ratings && root.ratings.rating) {
+    const ratingsArr = getAsArray(root.ratings.rating);
+    const chosenRating =
+      ratingsArr.find((r: any) => r["@_default"] === "true" || r["@_default"] === true) ||
+      ratingsArr.find((r: any) => r["@_name"] === "imdb" || r["@_name"] === "themoviedb") ||
+      ratingsArr[0];
+
+    if (chosenRating) {
+      if (rating === null && chosenRating.value !== undefined) {
+        const val = parseFloat(String(extractStringFromXmlTag(chosenRating.value) || chosenRating.value));
+        if (!isNaN(val) && val > 0) rating = val;
+      }
+      if (votes === null && chosenRating.votes !== undefined) {
+        const v = parseInt(String(extractStringFromXmlTag(chosenRating.votes) || chosenRating.votes), 10);
+        if (!isNaN(v) && v > 0) votes = v;
+      }
+    }
+  }
+
+  return { rating, votes };
+}
+
+export function extractYear(root: any): number | null {
+  if (root.year !== undefined && root.year !== null) {
+    const y = parseInt(String(extractStringFromXmlTag(root.year) || root.year), 10);
+    if (!isNaN(y) && y > 1880 && y < 2100) return y;
+  }
+  if (root.premiered) {
+    const p = String(extractStringFromXmlTag(root.premiered) || root.premiered).trim();
+    const m = p.match(/^(\d{4})/);
+    if (m) {
+      const y = parseInt(m[1], 10);
+      if (!isNaN(y) && y > 1880 && y < 2100) return y;
+    }
+  }
+  if (root.releasedate) {
+    const p = String(extractStringFromXmlTag(root.releasedate) || root.releasedate).trim();
+    const m = p.match(/^(\d{4})/);
+    if (m) {
+      const y = parseInt(m[1], 10);
+      if (!isNaN(y) && y > 1880 && y < 2100) return y;
+    }
+  }
+  return null;
+}
+
 export function parseTvShowNfo(nfoPath: string): TvShowMetadata | null {
   try {
     if (!fs.existsSync(nfoPath)) return null;
@@ -78,20 +341,33 @@ export function parseTvShowNfo(nfoPath: string): TvShowMetadata | null {
     if (!parsed || !parsed.tvshow) return null;
     const root = parsed.tvshow;
     
-    const genres: string[] = [];
-    if (root.genre) {
-      getAsArray(root.genre).forEach((g: any) => {
-        if (g) genres.push(String(g).trim());
+    const genres = extractGenres(root);
+    const tags = extractTags(root);
+    const studios = extractStudios(root);
+    const { rating } = extractRatingsAndVotes(root);
+    const year = extractYear(root);
+
+    const actors: Array<{ name: string; role: string }> = [];
+    if (root.actor) {
+      getAsArray(root.actor).forEach((act: any) => {
+        if (act) {
+          const name = extractStringFromXmlTag(act.name);
+          const role = act.role ? (extractStringFromXmlTag(act.role) || "") : "";
+          if (name) actors.push({ name, role });
+        }
       });
     }
 
     return {
-      title: root.title ? String(root.title).trim() : "",
-      year: root.year ? parseInt(root.year, 10) || null : null,
-      rating: root.rating ? parseFloat(root.rating) || null : null,
-      plot: root.plot ? String(root.plot).trim() : null,
+      title: root.title ? String(extractStringFromXmlTag(root.title) || root.title).trim() : "",
+      year,
+      rating,
+      plot: root.plot ? String(extractStringFromXmlTag(root.plot) || root.plot).trim() : null,
       genres,
-      studio: root.studio ? String(root.studio).trim() : null,
+      studio: studios.length > 0 ? studios[0] : (root.studio ? String(extractStringFromXmlTag(root.studio) || root.studio).trim() : null),
+      studios,
+      tags,
+      actors,
     };
   } catch (err) {
     console.error(`Error parsing tvshow.nfo at ${nfoPath}:`, err);
@@ -189,12 +465,10 @@ export function findNfoFile(videoFilePath: string): string | null {
 }
 
 /**
- * Parse NFO XML file
+ * Parse NFO XML string directly
  */
-export function parseNfo(nfoPath: string): MovieMetadata | null {
+export function parseNfoFromString(content: string): MovieMetadata | null {
   try {
-    if (!fs.existsSync(nfoPath)) return null;
-    const content = fs.readFileSync(nfoPath, "utf8");
     if (!content || content.trim() === "") return null;
 
     const parser = new XMLParser({
@@ -211,23 +485,28 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
     const root = parsed.movie || parsed.tvshow || parsed.episodedetails;
     if (!root) return null;
 
-    // Clean genres
-    const genres: string[] = [];
-    if (root.genre) {
-      getAsArray(root.genre).forEach((g: any) => {
-        if (g) genres.push(String(g).trim());
-      });
-    }
+    const genres = extractGenres(root);
+    const tags = extractTags(root);
+    const set = extractSetName(root);
+    const directors = extractDirectors(root);
+    const writers = extractWriters(root);
+    const studios = extractStudios(root);
+    const { rating, votes } = extractRatingsAndVotes(root);
+    const year = extractYear(root);
 
     // Clean actors
     const actors: Array<{ name: string; role: string }> = [];
     if (root.actor) {
       getAsArray(root.actor).forEach((act: any) => {
-        if (act && act.name) {
-          actors.push({
-            name: String(act.name).trim(),
-            role: act.role ? String(act.role).trim() : "",
-          });
+        if (act) {
+          const name = extractStringFromXmlTag(act.name);
+          const role = act.role ? (extractStringFromXmlTag(act.role) || "") : "";
+          if (name) {
+            actors.push({
+              name,
+              role,
+            });
+          }
         }
       });
     }
@@ -235,14 +514,14 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
     // Parse runtime and convert to seconds (NFO runtime is usually in minutes)
     let runtimeSeconds: number | null = null;
     if (root.runtime) {
-      const parsedRuntime = parseInt(root.runtime, 10);
+      const parsedRuntime = parseInt(String(extractStringFromXmlTag(root.runtime) || root.runtime), 10);
       if (!isNaN(parsedRuntime)) {
         runtimeSeconds = parsedRuntime < 1000 ? parsedRuntime * 60 : parsedRuntime;
       }
     }
 
     // Format title
-    const title = root.title ? String(root.title).trim() : "";
+    const title = root.title ? String(extractStringFromXmlTag(root.title) || root.title).trim() : "";
 
     // Parse artwork fields from XML
     let thumb: string | null = null;
@@ -277,9 +556,9 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
     // Parse and deduplicate MPAA rating / certification
     let rawMpaa: string | null = null;
     if (root.mpaa) {
-      rawMpaa = String(root.mpaa).trim();
+      rawMpaa = String(extractStringFromXmlTag(root.mpaa) || root.mpaa).trim();
     } else if (root.certification) {
-      rawMpaa = String(root.certification).trim();
+      rawMpaa = String(extractStringFromXmlTag(root.certification) || root.certification).trim();
     }
     if (rawMpaa) {
       const parts = rawMpaa.split(/[\/\|,]/).map((p) => p.trim()).filter(Boolean);
@@ -304,26 +583,45 @@ export function parseNfo(nfoPath: string): MovieMetadata | null {
 
     return {
       title,
-      originalTitle: root.originaltitle ? String(root.originaltitle).trim() : null,
-      year: root.year ? parseInt(root.year, 10) || null : null,
-      rating: root.rating ? parseFloat(root.rating) || null : null,
-      votes: root.votes ? parseInt(root.votes, 10) || null : null,
+      originalTitle: root.originaltitle ? String(extractStringFromXmlTag(root.originaltitle) || root.originaltitle).trim() : null,
+      year,
+      rating,
+      votes,
       mpaa: rawMpaa,
       runtime: runtimeSeconds,
-      plot: root.plot ? String(root.plot).trim() : null,
-      tagline: root.tagline ? String(root.tagline).trim() : null,
+      plot: root.plot ? String(extractStringFromXmlTag(root.plot) || root.plot).trim() : null,
+      tagline: root.tagline ? String(extractStringFromXmlTag(root.tagline) || root.tagline).trim() : null,
       genres,
-      studio: root.studio ? String(root.studio).trim() : null,
-      director: root.director ? String(root.director).trim() : null,
+      studio: studios.length > 0 ? studios[0] : (root.studio ? String(extractStringFromXmlTag(root.studio) || root.studio).trim() : null),
+      studios,
+      director: directors.length > 0 ? directors.join(", ") : (root.director ? String(extractStringFromXmlTag(root.director) || root.director).trim() : null),
+      directors,
+      writers,
       actors,
-      trailer: root.trailer ? String(root.trailer).trim() : null,
-      aired: root.aired ? String(root.aired).trim() : null,
-      season: root.season ? parseInt(root.season, 10) || null : null,
-      episode: root.episode ? parseInt(root.episode, 10) || null : null,
+      trailer: root.trailer ? String(extractStringFromXmlTag(root.trailer) || root.trailer).trim() : null,
+      aired: root.aired ? String(extractStringFromXmlTag(root.aired) || root.aired).trim() : null,
+      season: root.season ? parseInt(String(extractStringFromXmlTag(root.season) || root.season), 10) || null : null,
+      episode: root.episode ? parseInt(String(extractStringFromXmlTag(root.episode) || root.episode), 10) || null : null,
+      set,
+      tags,
       thumb,
       poster,
       fanart
     };
+  } catch (err) {
+    console.error("Error parsing NFO content:", err);
+    return null;
+  }
+}
+
+/**
+ * Parse NFO XML file
+ */
+export function parseNfo(nfoPath: string): MovieMetadata | null {
+  try {
+    if (!fs.existsSync(nfoPath)) return null;
+    const content = fs.readFileSync(nfoPath, "utf8");
+    return parseNfoFromString(content);
   } catch (err) {
     console.error(`Error parsing NFO file ${nfoPath}:`, err);
     return null;

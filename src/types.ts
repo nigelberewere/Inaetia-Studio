@@ -27,9 +27,14 @@ export interface Movie {
   tagline?: string | null;
   genres?: string[];
   studio?: string | null;
+  studios?: string[];
   director?: string | null;
+  directors?: string[];
+  writers?: string[];
   actors?: Array<{ name: string; role: string }>;
   trailer?: string | null;
+  set?: string | null;
+  tags?: string[];
 
   // Artwork paths (served via API)
   poster?: string | null;
@@ -51,11 +56,27 @@ export interface Movie {
   showRating?: number | null;
   showGenres?: string[];
   showStudio?: string | null;
+  showTags?: string[];
 
   // Metadata source tracking
   metadataSource?: "nfo" | "filename";
   hasRichMetadata?: boolean;
   nfoMtime?: string;
+}
+
+export interface SimilarMovieRecommendation {
+  movie: Movie;
+  score: number;
+  matchReason: string;
+  matchedFactors: {
+    collection?: string;
+    directors?: string[];
+    actors?: string[];
+    genres?: string[];
+    tags?: string[];
+    studio?: string;
+    writer?: string;
+  };
 }
 
 export interface Track {

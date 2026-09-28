@@ -1,4 +1,4 @@
-import { Movie, Profile, TasteProfile, HeroRecommendation, ProfileRecommendationData, RecentlyShownLog } from "./types";
+import { Movie, Profile, TasteProfile, HeroRecommendation, ProfileRecommendationData, RecentlyShownLog, SimilarMovieRecommendation } from "./types";
 
 // Configurable weights for composite scoring (Phase B constraint)
 export const RECOMMENDATION_WEIGHTS = {
@@ -50,16 +50,20 @@ function getItemMetadata(movie: Movie) {
 
   const actors = movie.actors ? movie.actors.map((a) => a.name.trim()).filter(Boolean) : [];
   
-  const directors = movie.director
-    ? movie.director.split(/[,/]/).map((d) => d.trim()).filter(Boolean)
-    : [];
+  const directors = movie.directors && movie.directors.length > 0
+    ? movie.directors
+    : (movie.director
+      ? movie.director.split(/[,/]/).map((d) => d.trim()).filter(Boolean)
+      : []);
 
-  const studio = movie.studio || movie.showStudio || null;
+  const studio = movie.studio || (movie.studios && movie.studios[0]) || movie.showStudio || null;
 
   const yearVal = movie.year || movie.showYear || null;
   const decade = yearVal ? `${Math.floor(yearVal / 10) * 10}s` : null;
 
-  const tags = extractKeywords(movie);
+  const explicitTags = movie.tags && movie.tags.length > 0 ? movie.tags : (movie.showTags || []);
+  const keywordTags = extractKeywords(movie);
+  const tags = Array.from(new Set([...explicitTags, ...keywordTags]));
 
   const rating = movie.rating ?? movie.showRating ?? null;
 
@@ -571,5 +575,335 @@ function generateColdStartRecommendations(
     movie: item.movie,
     score: item.score,
     whyTag: item.whyTag,
+  }));
+}
+
+// Words to ignore when matching plot text
+const STOP_WORDS = new Set([
+  "a", "about", "above", "after", "again", "against", "all", "also", "an", "and",
+  "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being",
+  "below", "between", "both", "but", "by", "can't", "cannot", "could", "couldn't",
+  "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during",
+  "each", "few", "film", "films", "for", "from", "further", "had", "hadn't", "has",
+  "hasn't", "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her",
+  "here", "here's", "hers", "herself", "him", "himself", "his", "how", "how's",
+  "i", "i'd", "i'll", "i'm", "i've", "if", "in", "into", "is", "isn't", "it",
+  "it's", "its", "itself", "let's", "me", "more", "most", "movie", "movies", "mustn't",
+  "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or",
+  "other", "ought", "our", "ours", "ourselves", "out", "over", "own", "same", "shan't",
+  "she", "she'd", "she'll", "she's", "should", "shouldn't", "so", "some", "such",
+  "than", "that", "that's", "the", "their", "theirs", "them", "themselves", "then",
+  "there", "there's", "these", "they", "they'd", "they'll", "they're", "they've",
+  "this", "those", "through", "to", "too", "under", "until", "up", "very", "was",
+  "wasn't", "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what",
+  "what's", "when", "when's", "where", "where's", "which", "while", "who", "who's",
+  "whom", "why", "why's", "with", "won't", "would", "wouldn't", "you", "you'd",
+  "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
+]);
+
+function extractPlotKeywords(text?: string | null): string[] {
+  if (!text) return [];
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !STOP_WORDS.has(w));
+  return Array.from(new Set(words));
+}
+
+function normalizeGenreName(g: string): string {
+  const lower = g.trim().toLowerCase();
+  if (lower === "science fiction" || lower === "scifi") return "sci-fi";
+  if (lower === "action & adventure") return "action";
+  if (lower === "sci-fi & fantasy") return "fantasy";
+  return lower;
+}
+
+function normalizeSetName(name?: string | null): string {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/\b(collection|trilogy|saga|series|franchise|quadrilogy|anthology|set)\b/gi, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+function formatCapitalized(text: string): string {
+  if (!text) return "";
+  return text
+    .split(" ")
+    .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ""))
+    .join(" ");
+}
+
+/**
+ * PHASE E — Item-to-Item Content-Based Recommendation Engine
+ * Uses the rich metadata from TinyMediaManager (TMM) NFO files:
+ * Collections/Sets, Directors, Lead/Supporting Cast, Curated Tags, Genres,
+ * Production Studios, Screenwriters, Plot Thematic Keywords, Era/Year, and Quality.
+ */
+export function getSimilarMovies(
+  targetMovie: Movie,
+  catalog: Movie[],
+  limit: number = 6
+): SimilarMovieRecommendation[] {
+  if (!targetMovie || !catalog || catalog.length === 0) {
+    return [];
+  }
+
+  // Pre-normalize target attributes
+  const targetId = targetMovie.id;
+  const targetNormSet = normalizeSetName(targetMovie.set);
+  const targetRawSet = targetMovie.set ? targetMovie.set.trim() : null;
+
+  const targetGenres = Array.from(
+    new Set((targetMovie.genres || targetMovie.showGenres || []).map(normalizeGenreName))
+  );
+
+  const targetDirectors = (
+    targetMovie.directors && targetMovie.directors.length > 0
+      ? targetMovie.directors
+      : (targetMovie.director ? targetMovie.director.split(/[,/]/) : [])
+  ).map((d) => d.trim().toLowerCase()).filter(Boolean);
+
+  const targetWriters = (targetMovie.writers || []).map((w) => w.trim().toLowerCase()).filter(Boolean);
+
+  const targetActors = (targetMovie.actors || []).map((a) => a.name.trim().toLowerCase()).filter(Boolean);
+  const targetLeadActors = targetActors.slice(0, 3);
+  const targetSupportingActors = targetActors.slice(3);
+
+  const targetStudios = (
+    targetMovie.studios && targetMovie.studios.length > 0
+      ? targetMovie.studios
+      : (targetMovie.studio ? [targetMovie.studio] : [])
+  ).map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+  const targetTags = Array.from(
+    new Set((targetMovie.tags || targetMovie.showTags || []).map((t) => t.trim().toLowerCase()).filter(Boolean))
+  );
+
+  const targetPlotKeywords = extractPlotKeywords(`${targetMovie.plot || ""} ${targetMovie.tagline || ""}`);
+
+  const targetYear = targetMovie.year || targetMovie.showYear || null;
+  const targetCategory = targetMovie.category?.trim().toLowerCase();
+
+  const candidates: Array<{
+    movie: Movie;
+    score: number;
+    matchReason: string;
+    matchedFactors: SimilarMovieRecommendation["matchedFactors"];
+  }> = [];
+
+  const seenIds = new Set<string>([targetId]);
+
+  for (const m of catalog) {
+    if (seenIds.has(m.id)) continue;
+    // Exclude candidate if it has the exact same filepath or filename
+    if (targetMovie.filename && m.filename && targetMovie.filename === m.filename) continue;
+
+    // If target is an episode, exclude other episodes of the same show
+    if (
+      targetMovie.type === "episode" &&
+      ((targetMovie.showTitle && m.showTitle === targetMovie.showTitle) ||
+       (targetMovie.showName && m.showName === targetMovie.showName))
+    ) {
+      continue;
+    }
+
+    seenIds.add(m.id);
+
+    let score = 0;
+    const matchedFactors: SimilarMovieRecommendation["matchedFactors"] = {};
+
+    // 1. Franchise / Movie Set / Collection Match (MASSIVE SIGNAL: +55 pts)
+    const candNormSet = normalizeSetName(m.set);
+    if (targetNormSet && candNormSet) {
+      const isSetMatch =
+        targetNormSet === candNormSet ||
+        (targetNormSet.length >= 4 && candNormSet.length >= 4 &&
+         (targetNormSet.includes(candNormSet) || candNormSet.includes(targetNormSet)));
+
+      if (isSetMatch) {
+        score += 55;
+        matchedFactors.collection = m.set || targetRawSet || undefined;
+      }
+    }
+
+    // 2. Director Match (VERY STRONG STYLISTIC SIGNAL: +28 for 1st, +12 for additional)
+    const candDirectors = (
+      m.directors && m.directors.length > 0
+        ? m.directors
+        : (m.director ? m.director.split(/[,/]/) : [])
+    ).map((d) => d.trim().toLowerCase()).filter(Boolean);
+
+    const sharedDirectors = candDirectors.filter((d) => targetDirectors.includes(d));
+    if (sharedDirectors.length > 0) {
+      score += 28 + (sharedDirectors.length - 1) * 12;
+      matchedFactors.directors = sharedDirectors.map(formatCapitalized);
+    }
+
+    // 3. Cast / Actor Match (LEAD: +15, SUPPORTING: +7, OTHER: +4)
+    const candActors = (m.actors || []).map((a) => a.name.trim().toLowerCase()).filter(Boolean);
+    const candLeadActors = candActors.slice(0, 3);
+    const candSupportingActors = candActors.slice(3);
+
+    const matchedLeadWithLead = candLeadActors.filter((a) => targetLeadActors.includes(a));
+    const matchedLeadWithSupp = candLeadActors.filter((a) => targetSupportingActors.includes(a));
+    const matchedSuppWithLead = candSupportingActors.filter((a) => targetLeadActors.includes(a));
+    const matchedSuppWithSupp = candSupportingActors.filter((a) => targetSupportingActors.includes(a));
+
+    const totalSharedActors = Array.from(new Set([
+      ...matchedLeadWithLead,
+      ...matchedLeadWithSupp,
+      ...matchedSuppWithLead,
+      ...matchedSuppWithSupp,
+    ]));
+
+    if (totalSharedActors.length > 0) {
+      score += matchedLeadWithLead.length * 15;
+      score += matchedLeadWithSupp.length * 7;
+      score += matchedSuppWithLead.length * 7;
+      score += matchedSuppWithSupp.length * 4;
+      matchedFactors.actors = totalSharedActors.map(formatCapitalized);
+    }
+
+    // 4. Curated Tags Match (THEMATIC HYPER-SPECIFIC: +9 pts per tag, up to 27)
+    const candTags = Array.from(
+      new Set((m.tags || m.showTags || []).map((t) => t.trim().toLowerCase()).filter(Boolean))
+    );
+    const sharedTags = candTags.filter((t) => targetTags.includes(t));
+    if (sharedTags.length > 0) {
+      score += Math.min(27, sharedTags.length * 9);
+      matchedFactors.tags = sharedTags.map(formatCapitalized);
+    }
+
+    // 5. Genres Overlap (UP TO 35 PTS)
+    const candGenres = Array.from(
+      new Set((m.genres || m.showGenres || []).map(normalizeGenreName))
+    );
+    const sharedGenres = candGenres.filter((g) => targetGenres.includes(g));
+    if (sharedGenres.length > 0) {
+      // Overlap count bonus
+      if (sharedGenres.length === 1) score += 10;
+      else if (sharedGenres.length === 2) score += 20;
+      else score += 30;
+
+      // Jaccard similarity bonus
+      const unionSize = new Set([...targetGenres, ...candGenres]).size;
+      if (unionSize > 0) {
+        score += (sharedGenres.length / unionSize) * 12;
+      }
+
+      // First genre identical bonus
+      if (targetGenres.length > 0 && candGenres.length > 0 && targetGenres[0] === candGenres[0]) {
+        score += 6;
+      }
+
+      matchedFactors.genres = sharedGenres.map(formatCapitalized);
+    }
+
+    // 6. Production Studio Match (+10 for recognized studios, +5 for others)
+    const candStudios = (
+      m.studios && m.studios.length > 0
+        ? m.studios
+        : (m.studio ? [m.studio] : [])
+    ).map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+    const sharedStudios = candStudios.filter((s) => targetStudios.some((ts) => ts.includes(s) || s.includes(ts)));
+    if (sharedStudios.length > 0) {
+      const isRecognizedStudio = sharedStudios.some((s) =>
+        /marvel|pixar|disney|ghibli|warner|universal|paramount|columbia|sony|a24|lucasfilm|blumhouse|dreamworks|hbo|netflix/i.test(s)
+      );
+      score += isRecognizedStudio ? 10 : 5;
+      matchedFactors.studio = formatCapitalized(sharedStudios[0]);
+    }
+
+    // 7. Screenwriter Match (+10 pts)
+    const candWriters = (m.writers || []).map((w) => w.trim().toLowerCase()).filter(Boolean);
+    const sharedWriters = candWriters.filter((w) => targetWriters.includes(w));
+    if (sharedWriters.length > 0) {
+      score += 10;
+      matchedFactors.writer = formatCapitalized(sharedWriters[0]);
+    }
+
+    // 8. Plot & Tagline Thematic Keyword Overlap (+1.5 pts per word, up to 9 pts)
+    if (targetPlotKeywords.length > 0) {
+      const candPlotKeywords = extractPlotKeywords(`${m.plot || ""} ${m.tagline || ""}`);
+      const sharedKeywords = candPlotKeywords.filter((w) => targetPlotKeywords.includes(w));
+      if (sharedKeywords.length > 0) {
+        score += Math.min(9, sharedKeywords.length * 1.5);
+      }
+    }
+
+    // 9. Release Era / Year Proximity (UP TO +6 PTS)
+    const candYear = m.year || m.showYear || null;
+    if (targetYear && candYear) {
+      const yearDiff = Math.abs(targetYear - candYear);
+      if (yearDiff <= 2) score += 6;
+      else if (yearDiff <= 5) score += 4;
+      else if (yearDiff <= 10) score += 2;
+      else if (Math.floor(targetYear / 10) === Math.floor(candYear / 10)) score += 1;
+    }
+
+    // 10. Quality / Rating Boost (UP TO +4 PTS)
+    const candRating = m.rating ?? m.showRating ?? 6.5;
+    score += (candRating / 10) * 4;
+
+    // 11. Category / Media Type Match
+    if (targetCategory && m.category && targetCategory === m.category.trim().toLowerCase()) {
+      score += 2;
+    }
+    // Prefer feature films when target is a feature film
+    if (targetMovie.type === "movie" && m.type === "episode") {
+      score -= 8;
+    }
+
+    // Determine the single most compelling matchReason for the user
+    let matchReason = "More Like This";
+    if (matchedFactors.collection) {
+      const colName = matchedFactors.collection.replace(/\bcollection\b/gi, "").trim();
+      matchReason = colName ? `Part of ${colName}` : "Same Collection";
+    } else if (matchedFactors.directors && matchedFactors.directors.length > 0) {
+      matchReason = `Directed by ${matchedFactors.directors[0]}`;
+    } else if (matchedLeadWithLead.length > 0) {
+      matchReason = `Starring ${formatCapitalized(matchedLeadWithLead[0])}`;
+    } else if (matchedFactors.tags && matchedFactors.tags.length > 0) {
+      matchReason = `Theme: ${matchedFactors.tags[0]}`;
+    } else if (matchedFactors.studio && /marvel|pixar|disney|ghibli|a24|blumhouse|dreamworks|lucasfilm/i.test(matchedFactors.studio)) {
+      matchReason = `From ${matchedFactors.studio}`;
+    } else if (matchedFactors.writer) {
+      matchReason = `Written by ${matchedFactors.writer}`;
+    } else if (matchedFactors.genres && matchedFactors.genres.length >= 2) {
+      matchReason = `${matchedFactors.genres[0]} & ${matchedFactors.genres[1]}`;
+    } else if (matchedFactors.actors && matchedFactors.actors.length > 0) {
+      matchReason = `Also stars ${matchedFactors.actors[0]}`;
+    } else if (matchedFactors.genres && matchedFactors.genres.length === 1) {
+      matchReason = `More in ${matchedFactors.genres[0]}`;
+    } else if (targetYear && candYear && Math.abs(targetYear - candYear) <= 3) {
+      matchReason = `From the same era (${candYear})`;
+    }
+
+    candidates.push({
+      movie: m,
+      score: parseFloat(score.toFixed(2)),
+      matchReason,
+      matchedFactors,
+    });
+  }
+
+  // Sort candidates by score descending
+  candidates.sort((a, b) => b.score - a.score);
+
+  // Filter candidates to those with meaningful similarity
+  // If library has items with good scores (>= 10), prefer them.
+  // Otherwise relax so small libraries or sparsely-tagged items still get suggestions.
+  const qualifying = candidates.filter((c) => c.score >= 10);
+  const pool = qualifying.length >= limit ? qualifying : candidates;
+
+  return pool.slice(0, limit).map((c) => ({
+    movie: c.movie,
+    score: c.score,
+    matchReason: c.matchReason,
+    matchedFactors: c.matchedFactors,
   }));
 }
