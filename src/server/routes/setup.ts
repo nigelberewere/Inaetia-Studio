@@ -178,36 +178,6 @@ router.post("/api/rescan", async (req, res) => {
   }
 });
 
-// POST /api/thumbnails/clear
-router.post("/api/thumbnails/clear", async (req, res) => {
-  try {
-    const data = loadProfiles();
-    const profiles = data.profiles || [];
-    const hasProtectedAdmin = profiles.some((p: any) => p.isAdmin && (p.pin || p.pinHash));
-    if (hasProtectedAdmin) {
-      const session = getSessionFromReq(req);
-      if (!session || !session.isAdmin) {
-        return res.status(401).json({ error: "Admin authentication required to clear cache" });
-      }
-    }
-
-    const { thumbsCacheDir } = getPathsConfig();
-    if (fs.existsSync(thumbsCacheDir)) {
-      const files = fs.readdirSync(thumbsCacheDir);
-      for (const file of files) {
-        const fullPath = path.join(thumbsCacheDir, file);
-        if (fs.statSync(fullPath).isFile()) {
-          fs.unlinkSync(fullPath);
-        }
-      }
-      console.log("[Thumbnails] Thumbnail cache cleared successfully by user request.");
-    }
-    res.json({ success: true, message: "Thumbnail cache cleared successfully" });
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to clear thumbnail cache", details: err.message });
-  }
-});
-
 // GET /api/setup/status
 router.get("/api/setup/status", (req, res) => {
   const setupComplete = process.env.SETUP_COMPLETE === "true";
