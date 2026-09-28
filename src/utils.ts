@@ -116,6 +116,34 @@ export function formatCleanDate(rawDate?: string | number | null): string | null
   }
 }
 
+export function extractMovieYear(movie?: {
+  year?: number | string | null;
+  showYear?: number | string | null;
+  title?: string;
+  filename?: string;
+} | null): number | null {
+  if (!movie) return null;
+  if (movie.year !== undefined && movie.year !== null) {
+    const yr = typeof movie.year === "number" ? movie.year : parseInt(String(movie.year), 10);
+    if (!isNaN(yr) && yr >= 1890 && yr <= 2100) {
+      return yr;
+    }
+  }
+  if (movie.showYear !== undefined && movie.showYear !== null) {
+    const yr = typeof movie.showYear === "number" ? movie.showYear : parseInt(String(movie.showYear), 10);
+    if (!isNaN(yr) && yr >= 1890 && yr <= 2100) {
+      return yr;
+    }
+  }
+  const text = `${movie.title || ""} ${movie.filename || ""}`;
+  const match = text.match(/[\(\[\s._-]((?:19|20)\d\d)[\)\]\s._-]/) || text.match(/\b(19\d\d|20\d\d)\b/);
+  if (match) {
+    const yr = parseInt(match[1], 10);
+    if (!isNaN(yr) && yr >= 1890 && yr <= 2100) return yr;
+  }
+  return null;
+}
+
 export function normalizeSeriesName(name: string = ""): string {
   if (!name) return "";
   return name

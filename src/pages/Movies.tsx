@@ -9,7 +9,7 @@ import {
   LayoutGrid, List, Columns, Calendar, ArrowUpDown, Disc, Tag, Layers
 } from "lucide-react";
 import { Movie } from "../types";
-import { formatDuration, formatSize, formatCleanDate, normalizeSeriesName, pluralize } from "../utils";
+import { formatDuration, formatSize, formatCleanDate, normalizeSeriesName, pluralize, extractMovieYear } from "../utils";
 import { Badge } from "../components/common/Badge";
 
 type CollectionFilter = "all" | "cartoons" | string;
@@ -637,7 +637,7 @@ export default function Movies() {
                       </h3>
                       <div className="flex items-center gap-3 text-xs text-cinema-muted">
                         {movie.duration > 0 && <span>{formatDuration(movie.duration)}</span>}
-                        {movie.size > 0 && <span>• {formatSize(movie.size)}</span>}
+                        {extractMovieYear(movie) && <span>• {extractMovieYear(movie)}</span>}
                       </div>
                     </div>
                   </div>
@@ -670,7 +670,7 @@ export default function Movies() {
                           {movie.extension.replace(".", "")}
                         </span>
                         {movie.duration > 0 && <span>{formatDuration(movie.duration)}</span>}
-                        {movie.size > 0 && <span>{formatSize(movie.size)}</span>}
+                        {extractMovieYear(movie) && <span>• {extractMovieYear(movie)}</span>}
                       </div>
                     </div>
                     <button

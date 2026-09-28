@@ -582,6 +582,17 @@ export async function scanAllLibraries() {
       const fanart = artwork.fanart ? `/api/artwork/${id}/fanart` : null;
       const thumb = artwork.thumb ? `/api/artwork/${id}/thumb` : `/api/artwork/${id}/thumb`;
 
+      let resolvedYear = nfo ? nfo.year : null;
+      if (!resolvedYear) {
+        const yearMatch = filename.match(/[\(\[\s._-]((?:19|20)\d\d)[\)\]\s._-]/) || relativePath.match(/[\(\[\s._-]((?:19|20)\d\d)[\)\]\s._-]/);
+        if (yearMatch) {
+          const yr = parseInt(yearMatch[1], 10);
+          if (yr >= 1890 && yr <= 2100) {
+            resolvedYear = yr;
+          }
+        }
+      }
+
       const movieItem: Movie = {
         id,
         filename,
@@ -591,7 +602,7 @@ export async function scanAllLibraries() {
         added: addedDate.toISOString(),
         title,
         originalTitle: nfo ? nfo.originalTitle : null,
-        year: nfo ? nfo.year : null,
+        year: resolvedYear,
         rating: nfo ? nfo.rating : null,
         votes: nfo ? nfo.votes : null,
         mpaa: nfo ? nfo.mpaa : null,

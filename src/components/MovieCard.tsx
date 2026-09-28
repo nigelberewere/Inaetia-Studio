@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Movie } from "../types";
 import { useApp } from "../context/AppContext";
-import { Play, Clock, HardDrive, Star, Film, Tv } from "lucide-react";
-import { formatDuration, formatSize, sanitizeTitle } from "../utils";
+import { Play, Clock, Calendar, Star, Film, Tv } from "lucide-react";
+import { formatDuration, sanitizeTitle, extractMovieYear } from "../utils";
 
 interface MovieCardProps {
   movie: Movie;
@@ -25,6 +25,7 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
   };
 
   const displayTitle = sanitizeTitle(movie.title, movie.filename);
+  const movieYear = extractMovieYear(movie);
 
   // Default to portrait for movies, and landscape for episodes or simple clips
   const cardAspect = aspect || (movie.type === "movie" || movie.hasPoster ? "portrait" : "landscape");
@@ -74,9 +75,9 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
             <span className="text-xs font-extrabold text-white/90 line-clamp-3 leading-tight px-1 group-hover:text-cinema-amber transition-colors">
               {displayTitle}
             </span>
-            {movie.year && (
+            {movieYear && (
               <span className="text-[10px] font-bold text-cinema-muted mt-1 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                {movie.year}
+                {movieYear}
               </span>
             )}
           </div>
@@ -94,17 +95,13 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
           {movie.extension.replace(".", "")}
         </span>
 
-        {/* Rating/Year overlay on poster bottom */}
-        {isPortrait && hasRealPoster && (movie.rating || movie.year) && (
+        {/* Rating overlay on poster bottom */}
+        {isPortrait && hasRealPoster && movie.rating && (
           <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 px-2 py-0.5 bg-black/75 backdrop-blur-md rounded-md border border-white/10 text-[10px] font-bold text-white">
-            {movie.rating && (
-              <span className="flex items-center gap-0.5 text-cinema-amber">
-                <Star className="w-2.5 h-2.5 fill-current" />
-                {movie.rating.toFixed(1)}
-              </span>
-            )}
-            {movie.rating && movie.year && <span className="opacity-40">|</span>}
-            {movie.year && <span>{movie.year}</span>}
+            <span className="flex items-center gap-0.5 text-cinema-amber">
+              <Star className="w-2.5 h-2.5 fill-current" />
+              {(movie.rating > 10 ? movie.rating / 10 : movie.rating).toFixed(1)}
+            </span>
           </div>
         )}
       </div>
@@ -121,10 +118,12 @@ export default function MovieCard({ movie, progress, onClick, aspect }: MovieCar
             <Clock className="w-3.5 h-3.5" />
             {formatDuration(movie.duration)}
           </span>
-          <span className="flex items-center gap-1">
-            <HardDrive className="w-3.5 h-3.5" />
-            {formatSize(movie.size)}
-          </span>
+          {movieYear ? (
+            <span className="flex items-center gap-1 font-medium">
+              <Calendar className="w-3.5 h-3.5 text-cinema-muted" />
+              {movieYear}
+            </span>
+          ) : null}
         </div>
       </div>
       {progress !== undefined && (

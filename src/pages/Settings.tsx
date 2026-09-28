@@ -560,9 +560,6 @@ export default function Settings() {
             <HeartPulse className="w-5 h-5 text-cinema-amber animate-pulse" />
             <h2 className="font-bold text-white text-base">Metadata & Artwork Health Dashboard</h2>
           </div>
-          <span className="text-[11px] font-mono text-cinema-muted">
-            Powered by Tiny Media Manager (TMM) Integration
-          </span>
         </div>
 
         {health ? (

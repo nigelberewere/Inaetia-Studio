@@ -268,67 +268,35 @@ function ChannelCardItem({ ch, onSelectChannel }: ChannelCardItemProps) {
               background: `radial-gradient(circle at top right, ${ch.color || "#E11D48"}40, transparent 75%), linear-gradient(135deg, #18181b 0%, #09090b 100%)`
             }}
           >
-            {/* Geometric Grid Pattern */}
-            <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] opacity-10 pointer-events-none" />
-            
-            <div className="flex items-center justify-between z-10">
-              <div className="flex items-center gap-2">
-                <div 
-                  className="p-2 rounded-xl border border-white/10 shadow-inner"
-                  style={{ backgroundColor: `${ch.color || "#E11D48"}45` }}
-                >
-                  <Tv className="w-5 h-5 text-cinema-amber" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/70">
-                  Broadcast Network
-                </span>
+            <div className="flex items-center gap-2 z-10">
+              <div 
+                className="p-2 rounded-xl border border-white/10 shadow-inner"
+                style={{ backgroundColor: `${ch.color || "#E11D48"}45` }}
+              >
+                <Tv className="w-5 h-5 text-cinema-amber" />
               </div>
             </div>
 
-            <div className="z-10 flex items-end justify-between">
-              <div>
-                <span className="text-[10px] font-bold text-cinema-amber uppercase tracking-wider block">Linear TV Channel</span>
-                <h4 className="text-lg font-extrabold text-white tracking-tight leading-none mt-0.5">{ch.name}</h4>
-              </div>
-              <span className="text-2xl font-black text-white/30 tracking-tighter">
-                #{String(ch.channelNumber).padStart(2, "0")}
-              </span>
+            <div className="z-10">
+              <h4 className="text-lg font-extrabold text-white tracking-tight leading-none">{ch.name}</h4>
             </div>
           </div>
         )}
 
-        {/* Channel Logo "Bug" Overlay (Top-Right Broadcast Badge) */}
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/75 border border-white/20 backdrop-blur-md shadow-lg select-none">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-sm shadow-red-500/80" />
-          <span className="text-[10px] font-black uppercase tracking-widest text-white">
-            CH {String(ch.channelNumber).padStart(2, "0")}
-          </span>
-        </div>
-
-        {/* Live Indicator Watermark Bug (Bottom-Left) */}
-        <div className="absolute bottom-2.5 left-3 z-20 flex items-center gap-1.5">
-          <span className="px-2 py-0.5 rounded-md bg-cinema-amber/90 text-cinema-bg font-black text-[9px] uppercase tracking-wider shadow-md flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
-            LIVE
-          </span>
-          <span className="text-xs font-black text-white drop-shadow-md">
-            {ch.name}
-          </span>
+        {/* Channel Number Badge */}
+        <div className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 rounded-md bg-black/75 border border-white/10 backdrop-blur-md text-[10px] font-bold text-white select-none">
+          CH {String(ch.channelNumber).padStart(2, "0")}
         </div>
       </div>
 
-      {/* Extended Progress Bar & Now Playing Information (Extended to EVERY Card) */}
+      {/* Progress Bar & Program Information */}
       <div className="p-4 flex-1 flex flex-col justify-between space-y-3 bg-cinema-card-bg">
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] uppercase font-extrabold tracking-widest">
-            <span className="text-cinema-amber flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-cinema-amber animate-pulse" />
-              Now Playing
-            </span>
-            <span className="text-gray-400 font-bold">CH {String(ch.channelNumber).padStart(2, "0")}</span>
+        <div className="space-y-1">
+          <div className="text-xs font-bold text-cinema-amber truncate">
+            {ch.name}
           </div>
 
-          <h3 className="text-white font-bold text-sm leading-snug line-clamp-2 break-words group-hover:text-cinema-amber transition-colors" title={prog?.title || ch.name}>
+          <h3 className="text-white font-bold text-sm leading-snug line-clamp-1 group-hover:text-cinema-amber transition-colors" title={prog?.title || ch.name}>
             {prog?.title || `${ch.name} Linear Broadcast`}
           </h3>
 
@@ -649,33 +617,19 @@ function LivePlayer({ channel, channelsList, onClose, onChannelChange }: LivePla
           </div>
         )}
 
-        {/* Custom Overlay Controls */}
-        <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10">
-          <span className="flex items-center gap-1.5 bg-red-600 text-white text-[10px] font-black uppercase px-2.5 py-1 rounded-md shadow-lg tracking-widest pointer-events-none select-none">
-            <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
-            LIVE BROADCAST
-          </span>
-
-          {liveDrift > 3 ? (
+        {/* Sync Button Overlay (only shown if stream falls behind broadcast schedule) */}
+        {liveDrift > 3 && (
+          <div className="absolute top-4 left-4 z-10">
             <button
               onClick={syncToLive}
-              className="bg-cinema-amber hover:bg-cinema-amber/95 hover:scale-[1.02] text-cinema-bg font-black text-[10px] uppercase px-2.5 py-1 rounded-md shadow-lg flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer select-none"
-              title="Click to synchronize your playhead precisely with the real-time server broadcast schedule"
+              className="bg-cinema-amber hover:bg-cinema-amber/95 text-cinema-bg font-bold text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 transition-all cursor-pointer select-none"
+              title="Click to synchronize your playhead to live broadcast"
             >
-              <Clock className="w-3 h-3" />
-              Behind by {liveDrift}s • Click to Sync
+              <Clock className="w-3.5 h-3.5" />
+              Behind by {liveDrift}s • Sync to Live
             </button>
-          ) : (
-            <span className="bg-emerald-950/80 border border-emerald-500/35 text-emerald-400 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-lg flex items-center gap-1.5 pointer-events-none select-none">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              IN SYNC WITH LIVE
-            </span>
-          )}
-
-          <span className="bg-black/60 text-gray-300 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-lg border border-white/5 pointer-events-none select-none">
-            SEEK POSITION LOCKED
-          </span>
-        </div>
+          </div>
+        )}
 
         {/* Bumper "Up Next" Notification Overlay (shown in the last 60 seconds) */}
         {showBumper && nowPlaying?.nextProgram && (

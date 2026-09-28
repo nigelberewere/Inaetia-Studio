@@ -4,6 +4,7 @@ import {
   cleanTrackTitle,
   formatDuration,
   formatBytes,
+  extractMovieYear,
 } from "../utils";
 
 describe("Media String & Formatting Utils", () => {
@@ -34,5 +35,25 @@ describe("Media String & Formatting Utils", () => {
     expect(formatBytes(1024)).toBe("1 KB");
     expect(formatBytes(1024 * 1024 * 1.5)).toBe("1.5 MB");
     expect(formatBytes(1024 * 1024 * 1024 * 2)).toBe("2 GB");
+  });
+
+  it("extracts movie release year accurately with priority and regex fallback", () => {
+    // 1. Direct number year
+    expect(extractMovieYear({ year: 2014, title: "Interstellar" })).toBe(2014);
+
+    // 2. String year
+    expect(extractMovieYear({ year: "1999" as unknown as number, title: "The Matrix" })).toBe(1999);
+
+    // 3. TV show year fallback
+    expect(extractMovieYear({ showYear: 2008, title: "Breaking Bad" })).toBe(2008);
+
+    // 4. Filename extraction when year is null
+    expect(extractMovieYear({ year: null, filename: "Inception.2010.1080p.BluRay.x264.mkv" })).toBe(2010);
+    expect(extractMovieYear({ year: null, title: "Gladiator (2000)" })).toBe(2000);
+
+    // 5. Handles null, undefined, and non-year patterns gracefully
+    expect(extractMovieYear(null)).toBeNull();
+    expect(extractMovieYear({ year: null, filename: "random_home_video.mp4" })).toBeNull();
+    expect(extractMovieYear({ year: 1800 })).toBeNull(); // Out of movie era bounds
   });
 });

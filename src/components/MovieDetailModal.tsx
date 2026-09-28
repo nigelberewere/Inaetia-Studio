@@ -336,9 +336,6 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                   <Film className="w-4 h-4 text-cinema-amber" /> More Like This
                 </h3>
-                <span className="text-[11px] text-cinema-muted hidden sm:inline">
-                  TMM Recommendation Engine
-                </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
