@@ -320,6 +320,10 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
           e.preventDefault();
           closePlayer();
           break;
+        case "m":
+          e.preventDefault();
+          toggleMute();
+          break;
         case "arrowleft":
           e.preventDefault();
           skipTime(-10);
@@ -503,7 +507,12 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   }, [isDragging, dragTime]);
 
   const toggleMute = () => {
-    setIsMuted(!isMuted);
+    if (isMuted) {
+      setIsMuted(false);
+      if (volume === 0) setVolume(0.5);
+    } else {
+      setIsMuted(true);
+    }
     triggerControlsVisibility();
   };
 
@@ -768,27 +777,42 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
               )}
 
               {/* Volume Controller */}
-              <div className="flex items-center gap-1.5 ml-2 group/volume">
+              <div className="flex items-center gap-2 ml-1 sm:ml-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-2.5 py-1 transition-all">
                 <button
                   onClick={toggleMute}
-                  className="p-2 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-                  title="Mute"
+                  className="p-1 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer"
+                  title={isMuted ? "Unmute (M)" : "Mute (M)"}
+                  id="btn-video-volume-mute"
                 >
-                  {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                  {isMuted || volume === 0 ? (
+                    <VolumeX className="w-4.5 h-4.5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-4.5 h-4.5 text-cinema-amber" />
+                  )}
                 </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => {
-                    setVolume(parseFloat(e.target.value));
-                    setIsMuted(false);
-                  }}
-                  className="w-0 group-hover/volume:w-16 h-1 rounded-lg appearance-none bg-white/20 accent-cinema-amber transition-all duration-300 focus:outline-none"
-                  title="Volume (Up/Down Arrow)"
-                />
+                <div className="w-16 sm:w-20 md:w-24 flex items-center">
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={isMuted ? 0 : volume}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setVolume(val);
+                      if (isMuted && val > 0) {
+                        setIsMuted(false);
+                      }
+                      triggerControlsVisibility();
+                    }}
+                    className="w-full h-1.5 rounded-lg appearance-none bg-white/20 accent-cinema-amber cursor-pointer focus:outline-none transition-all"
+                    style={{
+                      background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.2) 100%)`
+                    }}
+                    title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}% (Up/Down Arrow)`}
+                    id="slider-video-volume"
+                  />
+                </div>
               </div>
             </div>
 
