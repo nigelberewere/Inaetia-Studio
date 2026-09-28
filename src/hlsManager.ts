@@ -405,12 +405,10 @@ export async function startOrGetHlsTranscode(
 
   console.log(`[HLS Job] Spawning FFmpeg for ${fileId} at seek ${seekOffset}s (Active: ${runningJobs.length + 1}/${MAX_CONCURRENT_HLS_TRANSCODES})...`);
 
-  // Clean up existing playlist if starting from offset 0
-  if (seekOffset === 0) {
-    try {
-      if (fs.existsSync(playlistPath)) fs.unlinkSync(playlistPath);
-    } catch (_) {}
-  }
+  // Clean up existing playlist before starting FFmpeg transcode
+  try {
+    if (fs.existsSync(playlistPath)) fs.unlinkSync(playlistPath);
+  } catch (_) {}
 
   const childProc = spawn("ffmpeg", ffmpegArgs);
 

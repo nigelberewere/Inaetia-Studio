@@ -54,6 +54,9 @@ export default function MusicPlayer() {
     }
   }, [isPlayingAudio]);
 
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState<number | null>(null);
+
   // Sync volume
   useEffect(() => {
     const audio = audioRef.current;
@@ -69,7 +72,7 @@ export default function MusicPlayer() {
   };
 
   const handleTimeUpdate = () => {
-    if (audioRef.current) {
+    if (audioRef.current && !isDragging) {
       setCurrentTime(audioRef.current.currentTime);
     }
   };
@@ -81,9 +84,10 @@ export default function MusicPlayer() {
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSeekCommit = (val: number) => {
+    setIsDragging(false);
+    setDragTime(null);
     if (audioRef.current) {
-      const val = parseFloat(e.target.value);
       audioRef.current.currentTime = val;
       setCurrentTime(val);
     }
@@ -166,15 +170,34 @@ export default function MusicPlayer() {
         {/* Progress bar and time labels */}
         <div className="flex items-center gap-3.5 w-full">
           <span className="text-[10px] font-mono text-cinema-muted w-8 text-right select-none">
-            {formatTime(currentTime)}
+            {formatTime(isDragging && dragTime !== null ? dragTime : currentTime)}
           </span>
           <input
             type="range"
             min={0}
             max={duration || 100}
             step={0.1}
-            value={currentTime}
-            onChange={handleSeek}
+            value={isDragging && dragTime !== null ? dragTime : currentTime}
+            onMouseDown={(e) => {
+              setIsDragging(true);
+              setDragTime(parseFloat((e.target as HTMLInputElement).value));
+            }}
+            onTouchStart={(e) => {
+              setIsDragging(true);
+              setDragTime(parseFloat((e.target as HTMLInputElement).value));
+            }}
+            onInput={(e) => {
+              if (isDragging) {
+                setDragTime(parseFloat((e.target as HTMLInputElement).value));
+              }
+            }}
+            onChange={(e) => {
+              setDragTime(parseFloat(e.target.value));
+            }}
+            onMouseUp={(e) => handleSeekCommit(parseFloat((e.target as HTMLInputElement).value))}
+            onTouchEnd={() => {
+              if (dragTime !== null) handleSeekCommit(dragTime);
+            }}
             className="flex-1 h-1 rounded-lg appearance-none cursor-pointer bg-white/10 accent-cinema-amber focus:outline-none hover:h-1.5 transition-all"
             title="Seek Audio"
           />

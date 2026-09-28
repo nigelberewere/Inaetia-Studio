@@ -68,6 +68,8 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragTime, setDragTime] = useState<number | null>(null);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -76,6 +78,13 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   const [showControls, setShowControls] = useState(true);
   const [resumeTime, setResumeTime] = useState<number | null>(null);
   const [showResumeToast, setShowResumeToast] = useState(false);
+
+  // Compute effective duration prioritizing probe metadata
+  const effectiveDuration = React.useMemo(() => {
+    if (movie.duration && movie.duration > 0) return movie.duration;
+    if (isFinite(duration) && duration > 0) return duration;
+    return 100;
+  }, [movie.duration, duration]);
 
   // Initialize HLS Engine
   useEffect(() => {
@@ -403,23 +412,95 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
     setCurrentVideo(null);
   };
 
-  const skipTime = (amount: number) => {
+  const performSeek = (targetTime: number) => {
     const video = videoRef.current;
-    if (video) {
-      video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + amount));
+    if (!video) return;
+
+    const clampedTime = Math.max(0, Math.min(effectiveDuration, targetTime));
+    setCurrentTime(clampedTime);
+    setIsBuffering(true);
+
+    if (hlsRef.current) {
+      let inBuffer = false;
+      for (let i = 0; i < video.buffered.length; i++) {
+        if (clampedTime >= video.buffered.start(i) && clampedTime <= video.buffered.end(i) + 2) {
+          inBuffer = true;
+          break;
+        }
+      }
+
+      const hlsDur = isFinite(video.duration) ? video.duration : 0;
+      if (inBuffer || (hlsDur > 0 && clampedTime <= hlsDur - 2)) {
+        video.currentTime = clampedTime;
+        if (video.paused) {
+          video.play().catch(() => {});
+        }
+        setIsBuffering(false);
+      } else {
+        console.log(`[VideoPlayer] Seeking to ${clampedTime}s via HLS transcode offset`);
+        const seekUrl = `/api/hls/${movie.id}/index.m3u8?ss=${Math.floor(clampedTime)}&_t=${Date.now()}`;
+        hlsRef.current.loadSource(seekUrl);
+        hlsRef.current.once(Hls.Events.MANIFEST_PARSED, () => {
+          video.currentTime = clampedTime;
+          video.play().catch(() => {});
+          setIsBuffering(false);
+        });
+      }
+    } else {
+      video.currentTime = clampedTime;
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
+      setIsBuffering(false);
+    }
+
+    triggerControlsVisibility();
+  };
+
+  const skipTime = (amount: number) => {
+    const baseTime = isDragging && dragTime !== null ? dragTime : currentTime;
+    const target = Math.max(0, Math.min(effectiveDuration, baseTime + amount));
+    performSeek(target);
+  };
+
+  const handleSeekDragStart = (val: number) => {
+    setIsDragging(true);
+    setDragTime(val);
+    triggerControlsVisibility();
+  };
+
+  const handleSeekDragMove = (val: number) => {
+    if (isDragging) {
+      setDragTime(val);
       triggerControlsVisibility();
     }
   };
 
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (video) {
-      const seekVal = parseFloat(e.target.value);
-      video.currentTime = seekVal;
-      setCurrentTime(seekVal);
-      triggerControlsVisibility();
-    }
+  const handleSeekCommit = (val: number) => {
+    setIsDragging(false);
+    setDragTime(null);
+    performSeek(val);
   };
+
+  // Global mouseup/touchend to prevent drag lock if mouse leaves input element
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleGlobalRelease = () => {
+      if (dragTime !== null) {
+        handleSeekCommit(dragTime);
+      } else {
+        setIsDragging(false);
+      }
+    };
+
+    window.addEventListener("mouseup", handleGlobalRelease);
+    window.addEventListener("touchend", handleGlobalRelease);
+    return () => {
+      window.removeEventListener("mouseup", handleGlobalRelease);
+      window.removeEventListener("touchend", handleGlobalRelease);
+    };
+  }, [isDragging, dragTime]);
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
@@ -450,7 +531,7 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   // Video Events
   const handleTimeUpdate = () => {
     const video = videoRef.current;
-    if (video) {
+    if (video && !isDragging) {
       const current = video.currentTime;
       setCurrentTime(current);
     }
@@ -599,21 +680,46 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
           {/* Progress Timeline Row */}
           <div className="flex flex-col gap-1.5 w-full">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-mono text-cinema-muted w-12 text-right">
-                {formatTime(currentTime)}
+              <span className="text-xs font-mono text-cinema-muted w-12 text-right select-none">
+                {formatTime(isDragging && dragTime !== null ? dragTime : currentTime)}
               </span>
-              <input
-                type="range"
-                min={0}
-                max={(isFinite(duration) && duration > 0) ? duration : ((isFinite(movie.duration) && movie.duration > 0) ? movie.duration : 100)}
-                step={0.1}
-                value={currentTime}
-                onChange={handleSeekChange}
-                className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer bg-white/20 accent-cinema-amber focus:outline-none"
-                title="Seek Timeline"
-              />
-              <span className="text-xs font-mono text-cinema-muted w-12 text-left">
-                {formatTime((isFinite(duration) && duration > 0) ? duration : movie.duration)}
+              <div className="relative flex-1 flex items-center group py-2">
+                <input
+                  type="range"
+                  min={0}
+                  max={effectiveDuration}
+                  step={0.1}
+                  value={isDragging && dragTime !== null ? dragTime : currentTime}
+                  onMouseDown={(e) => handleSeekDragStart(parseFloat((e.target as HTMLInputElement).value))}
+                  onTouchStart={(e) => handleSeekDragStart(parseFloat((e.target as HTMLInputElement).value))}
+                  onInput={(e) => handleSeekDragMove(parseFloat((e.target as HTMLInputElement).value))}
+                  onChange={(e) => handleSeekDragMove(parseFloat(e.target.value))}
+                  onMouseUp={(e) => handleSeekCommit(parseFloat((e.target as HTMLInputElement).value))}
+                  onTouchEnd={() => {
+                    if (dragTime !== null) handleSeekCommit(dragTime);
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                      handleSeekCommit(parseFloat((e.target as HTMLInputElement).value));
+                    }
+                  }}
+                  className="w-full h-2 rounded-lg appearance-none cursor-pointer focus:outline-none transition-all accent-cinema-amber"
+                  style={{
+                    background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${
+                      effectiveDuration > 0
+                        ? Math.min(100, Math.max(0, ((isDragging && dragTime !== null ? dragTime : currentTime) / effectiveDuration) * 100))
+                        : 0
+                    }%, rgba(255,255,255,0.2) ${
+                      effectiveDuration > 0
+                        ? Math.min(100, Math.max(0, ((isDragging && dragTime !== null ? dragTime : currentTime) / effectiveDuration) * 100))
+                        : 0
+                    }%, rgba(255,255,255,0.2) 100%)`
+                  }}
+                  title="Seek Timeline"
+                />
+              </div>
+              <span className="text-xs font-mono text-cinema-muted w-12 text-left select-none">
+                {formatTime(effectiveDuration)}
               </span>
             </div>
           </div>
