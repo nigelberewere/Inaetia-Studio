@@ -60,7 +60,7 @@ function MainLayout() {
       {/* Page Body */}
       <main className="flex-1 w-full mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-3 md:py-4 overflow-x-hidden">
         {activeView === "home" && <Home />}
-        {activeView === "movies" && <Movies />}
+        {(activeView === "movies" || activeView === "tvshows") && <Movies />}
         {activeView === "music" && <Music />}
         {activeView === "livetv" && <LiveTV />}
         {activeView === "radio" && <Radio />}

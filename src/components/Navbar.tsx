@@ -107,6 +107,18 @@ export default function Navbar() {
           Movies
         </button>
         <button
+          id="btn-nav-tvshows"
+          onClick={() => { clearSearch(); setActiveView("tvshows"); }}
+          className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
+            activeView === "tvshows"
+              ? "bg-cinema-amber text-cinema-bg shadow-md shadow-cinema-amber/20 font-bold scale-[1.02]"
+              : "text-zinc-300 hover:text-white hover:bg-white/10"
+          }`}
+        >
+          <TvIcon className="w-3.5 h-3.5" />
+          TV Shows
+        </button>
+        <button
           id="btn-nav-livetv"
           onClick={() => { clearSearch(); setActiveView("livetv"); }}
           className={`flex items-center gap-2 px-5 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-all duration-300 platform-btn cursor-pointer ${
@@ -183,6 +195,13 @@ export default function Navbar() {
             title="Movies"
           >
             <Film className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => { clearSearch(); setActiveView("tvshows"); }}
+            className={`p-2 rounded-full transition-all active:scale-95 ${activeView === "tvshows" ? "text-cinema-amber bg-white/5" : "text-cinema-muted hover:text-cinema-text"}`}
+            title="TV Shows"
+          >
+            <TvIcon className="w-5 h-5" />
           </button>
           <button
             onClick={() => { clearSearch(); setActiveView("livetv"); }}

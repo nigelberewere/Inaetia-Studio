@@ -3,7 +3,7 @@ import { Movie, Track, ServerStatus, SearchResults, Profile, WatchHistoryItem, R
 import { safeFetch } from "../utils";
 import { ToastContainer, ToastItem } from "../components/common/Toast";
 
-export type ViewType = "home" | "movies" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
+export type ViewType = "home" | "movies" | "tvshows" | "music" | "livetv" | "settings" | "search" | "radio" | "radioguide";
 
 interface AppContextType {
   activeView: ViewType;

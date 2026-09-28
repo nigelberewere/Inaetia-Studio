@@ -12,7 +12,6 @@ import { Movie } from "../types";
 import { formatDuration, formatSize, formatCleanDate, normalizeSeriesName, pluralize } from "../utils";
 import { Badge } from "../components/common/Badge";
 
-type ContentTypeFilter = "all" | "movies" | "tvshows";
 type CollectionFilter = "all" | "marvel" | "cartoons" | string;
 type ViewMode = "poster" | "landscape" | "list";
 type SortOption = "recent" | "title" | "rating" | "duration" | "size";
@@ -20,15 +19,18 @@ type DecadeFilter = "all" | "2020s" | "2010s" | "2000s" | "older";
 type FormatFilter = "all" | "mkv" | "mp4" | "hd";
 
 export default function Movies() {
-  const { movies, loading, refreshLibrary, triggerRescan, setCurrentVideo, continueWatching } = useApp();
+  const { movies, loading, refreshLibrary, triggerRescan, setCurrentVideo, continueWatching, activeView } = useApp();
 
-  // Taxonomy Filter States: Row 1 = Content Type, Row 2 = Collections & Genres
-  const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeFilter>("all");
+  const isTvShows = activeView === "tvshows";
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>("all");
 
   const [selectedShow, setSelectedShow] = useState<string | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<string>("Season 1");
   const [activeDetailMovie, setActiveDetailMovie] = useState<Movie | null>(null);
+
+  React.useEffect(() => {
+    setSelectedShow(null);
+  }, [activeView]);
 
   // Layout & Filter States
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -245,18 +247,10 @@ export default function Movies() {
     };
   }, [selectedShow, shows]);
 
-  // Filter & Sort Content according to two-row taxonomy
+  // Filter & Sort Content according to active view & taxonomy
   const filteredContent = useMemo(() => {
-    let moviesList = movies.filter((m) => m.type === "movie");
-    let showsList = [...shows];
-    const videosBySubcategory: Record<string, Movie[]> = {};
-
-    // 1. Content Type Filter
-    if (contentTypeFilter === "movies") {
-      showsList = [];
-    } else if (contentTypeFilter === "tvshows") {
-      moviesList = [];
-    }
+    let moviesList = isTvShows ? [] : movies.filter((m) => m.type === "movie");
+    let showsList = isTvShows ? [...shows] : [];
 
     // 2. Collection / Genre Filter
     if (collectionFilter !== "all") {
@@ -324,7 +318,7 @@ export default function Movies() {
     });
 
     return { moviesList, showsList };
-  }, [contentTypeFilter, collectionFilter, movies, shows, decadeFilter, formatFilter, sortBy]);
+  }, [isTvShows, collectionFilter, movies, shows, decadeFilter, formatFilter, sortBy]);
 
   const handleOpenShow = (showName: string) => {
     setSelectedShow(showName);
@@ -343,120 +337,64 @@ export default function Movies() {
 
   return (
     <div className="space-y-4 pb-20 animate-fade-in" id="movies-library-page">
-      {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-black text-white flex items-center gap-3">
-            <Film className="w-8 h-8 text-cinema-amber" />
-            Media Library
-          </h1>
-          <p className="text-cinema-muted text-sm mt-1">
-            Browse movies, TV series, and animated shows.
-          </p>
+      {/* Collections & Genres Filter Bar with Refresh Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3" id="collection-filters-container">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 w-full max-w-full scrollbar-none" id="collection-tabs-list">
+          <button
+            onClick={() => setCollectionFilter("all")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
+              collectionFilter === "all"
+                ? "bg-white/20 text-white border-white/30"
+                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
+            }`}
+          >
+            All Collections
+          </button>
+          <button
+            onClick={() => setCollectionFilter("marvel")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
+              collectionFilter === "marvel"
+                ? "bg-red-500/20 text-red-400 border-red-500/40"
+                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <Shield className="w-3 h-3 text-red-400" /> Marvel Universe
+          </button>
+          <button
+            onClick={() => setCollectionFilter("cartoons")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
+              collectionFilter === "cartoons"
+                ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
+                : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <Video className="w-3 h-3 text-purple-400" /> Cartoons & Animation
+          </button>
+          {availableGenres.map((genre) => (
+            <button
+              key={genre}
+              onClick={() => setCollectionFilter(genre)}
+              className={`px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
+                collectionFilter === genre
+                  ? "bg-cinema-amber/20 text-cinema-amber border-cinema-amber/40"
+                  : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
+              }`}
+            >
+              {genre}
+            </button>
+          ))}
         </div>
 
         {/* Manual Rescan Trigger */}
         <button
           onClick={triggerRescan}
-          className="self-start md:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-all text-xs font-semibold"
+          className="self-start sm:self-auto flex items-center gap-2 px-3 py-1.5 rounded-xl bg-cinema-card border border-cinema-border hover:bg-white/5 text-cinema-muted hover:text-white transition-all text-xs font-semibold shrink-0 cursor-pointer"
           title="Reload Library Filesystem"
           id="btn-movies-reload"
         >
           <RefreshCw className="w-4 h-4" />
           Refresh Library
         </button>
-      </div>
-
-      {/* Two-Row Taxonomy Filter Bar */}
-      <div className="space-y-2" id="taxonomy-filters-container">
-        {/* Row 1: Content Type Filter */}
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cinema-muted/80 flex items-center gap-1">
-            <Layers className="w-3 h-3 text-cinema-amber" /> Content Type
-          </span>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 w-full max-w-full scrollbar-none" id="content-type-tabs-list">
-            {(
-              [
-                { id: "all", label: "All Media", icon: Folder },
-                { id: "movies", label: "Movies", icon: Clapperboard },
-                { id: "tvshows", label: "TV Shows", icon: Tv }
-              ] as const
-            ).map((tab) => {
-              const Icon = tab.icon;
-              const isActive = contentTypeFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setContentTypeFilter(tab.id);
-                    setSelectedShow(null);
-                  }}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border font-bold text-xs shrink-0 active:scale-95 transition-all cursor-pointer ${
-                    isActive
-                      ? "bg-cinema-amber text-cinema-bg border-cinema-amber shadow-lg shadow-cinema-amber/20"
-                      : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10 backdrop-blur-md"
-                  }`}
-                  id={`tab-content-type-${tab.id}`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Row 2: Collections & Genres Filter */}
-        <div className="space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-cinema-muted/80 flex items-center gap-1">
-            <Tag className="w-3 h-3 text-cinema-amber" /> Collections & Genres
-          </span>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 w-full max-w-full scrollbar-none" id="collection-tabs-list">
-            <button
-              onClick={() => setCollectionFilter("all")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-                collectionFilter === "all"
-                  ? "bg-white/20 text-white border-white/30"
-                  : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-              }`}
-            >
-              All Collections
-            </button>
-            <button
-              onClick={() => setCollectionFilter("marvel")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-                collectionFilter === "marvel"
-                  ? "bg-red-500/20 text-red-400 border-red-500/40"
-                  : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <Shield className="w-3 h-3 text-red-400" /> Marvel Universe
-            </button>
-            <button
-              onClick={() => setCollectionFilter("cartoons")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-                collectionFilter === "cartoons"
-                  ? "bg-purple-500/20 text-purple-400 border-purple-500/40"
-                  : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <Video className="w-3 h-3 text-purple-400" /> Cartoons & Animation
-            </button>
-            {availableGenres.map((genre) => (
-              <button
-                key={genre}
-                onClick={() => setCollectionFilter(genre)}
-                className={`px-3 py-1.5 rounded-xl border font-bold text-xs shrink-0 transition-all cursor-pointer ${
-                  collectionFilter === genre
-                    ? "bg-cinema-amber/20 text-cinema-amber border-cinema-amber/40"
-                    : "bg-white/5 border-white/10 text-cinema-muted hover:text-white hover:bg-white/10"
-                }`}
-              >
-                {genre}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Advanced Filter & Sorting Toolbar */}
