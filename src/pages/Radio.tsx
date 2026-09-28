@@ -186,7 +186,7 @@ export default function Radio() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
               {curatedStations.map((station) => {
                 const nowPlaying = nowPlayingMap[station.id];
                 const isTuned = activeStation?.id === station.id;
@@ -330,7 +330,7 @@ export default function Radio() {
               </div>
 
               {/* Compact Grid for Library Folder Streams */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {libraryFolderStreams.map((station) => {
                   const nowPlaying = nowPlayingMap[station.id];
                   const isTuned = activeStation?.id === station.id;

@@ -115,7 +115,7 @@ export default function Home() {
               const pct = (item.position / item.duration) * 100;
               const isPortrait = item.movie.type === "movie" || item.movie.hasPoster;
               return (
-                <div key={item.movieId} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                <div key={item.movieId} className={`${isPortrait ? "w-[150px] sm:w-[180px] md:w-[200px] lg:w-[220px]" : "w-[240px] sm:w-[280px] md:w-[320px] lg:w-[360px]"} shrink-0`}>
                   <MovieCard 
                     movie={item.movie} 
                     progress={pct} 
@@ -139,7 +139,7 @@ export default function Home() {
             {recentlyAdded.map((movie) => {
               const isPortrait = movie.type === "movie" || movie.hasPoster;
               return (
-                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[180px] md:w-[200px] lg:w-[220px]" : "w-[240px] sm:w-[280px] md:w-[320px] lg:w-[360px]"} shrink-0`}>
                   <MovieCard 
                     movie={movie} 
                     onClick={() => setActiveDetailMovie(movie)} 
@@ -160,7 +160,7 @@ export default function Home() {
           </div>
           <div className="horizontal-scroll">
             {allMovies.map((movie) => (
-              <div key={movie.id} className="w-[150px] sm:w-[190px] shrink-0">
+              <div key={movie.id} className="w-[150px] sm:w-[180px] md:w-[200px] lg:w-[220px] shrink-0">
                 <MovieCard 
                   movie={movie} 
                   onClick={() => setActiveDetailMovie(movie)} 
@@ -183,7 +183,7 @@ export default function Home() {
             {largeFiles.map((movie) => {
               const isPortrait = movie.type === "movie" || movie.hasPoster;
               return (
-                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[190px]" : "w-[240px] sm:w-[280px]"} shrink-0`}>
+                <div key={movie.id} className={`${isPortrait ? "w-[150px] sm:w-[180px] md:w-[200px] lg:w-[220px]" : "w-[240px] sm:w-[280px] md:w-[320px] lg:w-[360px]"} shrink-0`}>
                   <MovieCard 
                     movie={movie} 
                     onClick={() => setActiveDetailMovie(movie)} 

@@ -61,7 +61,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="sticky top-0 z-40 glass-nav px-4 md:px-8 py-3.5 flex items-center justify-between shadow-2xl transition-all duration-300">
+    <nav className="sticky top-0 z-40 glass-nav px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-3.5 flex items-center justify-between shadow-2xl transition-all duration-300">
       {/* Brand Logo */}
       <div 
         className={`items-center gap-2.5 cursor-pointer select-none group ${isSearchFocused ? "hidden sm:flex" : "flex"}`}

@@ -587,7 +587,7 @@ export default function Movies() {
 
             {/* Poster View */}
             {viewMode === "poster" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4 sm:gap-5 md:gap-6">
                 {filteredContent.showsList.map((show) => {
                   const firstEpisode = show.episodes[0];
                   return (
@@ -628,7 +628,7 @@ export default function Movies() {
 
             {/* Landscape View */}
             {viewMode === "landscape" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
                 {filteredContent.showsList.map((show) => {
                   const firstEpisode = show.episodes[0];
                   return (
@@ -718,7 +718,7 @@ export default function Movies() {
             </h2>
             
             {viewMode === "poster" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4 sm:gap-5 md:gap-6">
                 {filteredContent.moviesList.map((movie) => (
                   <MovieCard 
                     key={movie.id} 
@@ -730,7 +730,7 @@ export default function Movies() {
             )}
 
             {viewMode === "landscape" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
                 {filteredContent.moviesList.map((movie) => (
                   <div
                     key={movie.id}
@@ -817,7 +817,7 @@ export default function Movies() {
               </h2>
 
               {viewMode === "poster" && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4 sm:gap-5 md:gap-6">
                   {videoList.map((video) => (
                     <MovieCard 
                       key={video.id} 
@@ -829,7 +829,7 @@ export default function Movies() {
               )}
 
               {viewMode === "landscape" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6">
                   {videoList.map((video) => (
                     <div
                       key={video.id}

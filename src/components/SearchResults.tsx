@@ -78,7 +78,7 @@ export default function SearchResults() {
             <Film className="w-5 h-5" />
             <h3 className="font-bold text-lg text-white">Matched Movies</h3>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-4 sm:gap-5 md:gap-6">
             {searchResults.movies.map((movie) => (
               <div key={movie.id} className="relative">
                 <MovieCard movie={movie} />
