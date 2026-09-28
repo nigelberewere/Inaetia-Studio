@@ -47,6 +47,65 @@ interface FfprobeTask {
 const ffprobeQueue: FfprobeTask[] = [];
 let activeFfprobes = 0;
 
+function parseDurationValue(stdout: string): number {
+  if (!stdout) return 0;
+  try {
+    const trimmed = stdout.trim();
+    if (trimmed.startsWith("{")) {
+      const parsed = JSON.parse(trimmed);
+      if (parsed.format && parsed.format.duration) {
+        const d = parseFloat(parsed.format.duration);
+        if (d > 0) return Math.round(d);
+      }
+      if (parsed.streams && Array.isArray(parsed.streams)) {
+        for (const s of parsed.streams) {
+          if (s.duration) {
+            const d = parseFloat(s.duration);
+            if (d > 0) return Math.round(d);
+          }
+          if (s.tags) {
+            for (const key of Object.keys(s.tags)) {
+              if (key.toUpperCase().includes("DURATION")) {
+                const val = s.tags[key];
+                if (typeof val === "string" && val.includes(":")) {
+                  const parts = val.split(":");
+                  if (parts.length === 3) {
+                    const h = parseFloat(parts[0]) || 0;
+                    const m = parseFloat(parts[1]) || 0;
+                    const sec = parseFloat(parts[2]) || 0;
+                    const total = h * 3600 + m * 60 + sec;
+                    if (total > 0) return Math.round(total);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if (parsed.format && parsed.format.tags) {
+        for (const key of Object.keys(parsed.format.tags)) {
+          if (key.toUpperCase().includes("DURATION")) {
+            const val = parsed.format.tags[key];
+            if (typeof val === "string" && val.includes(":")) {
+              const parts = val.split(":");
+              if (parts.length === 3) {
+                const h = parseFloat(parts[0]) || 0;
+                const m = parseFloat(parts[1]) || 0;
+                const sec = parseFloat(parts[2]) || 0;
+                const total = h * 3600 + m * 60 + sec;
+                if (total > 0) return Math.round(total);
+              }
+            }
+          }
+        }
+      }
+    }
+    const num = parseFloat(trimmed);
+    if (!isNaN(num) && num > 0) return Math.round(num);
+  } catch (_) {}
+  return 0;
+}
+
 function processFfprobeQueue() {
   const { MAX_CONCURRENT_FFPROBES } = getPathsConfig();
   if (activeFfprobes >= MAX_CONCURRENT_FFPROBES || ffprobeQueue.length === 0) {
@@ -59,16 +118,13 @@ function processFfprobeQueue() {
   activeFfprobes++;
   execFile(
     "ffprobe",
-    ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", task.filepath],
+    ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", task.filepath],
     (err, stdout) => {
       activeFfprobes--;
 
-      let duration = 120;
+      let duration = 0;
       if (!err && stdout) {
-        const parsed = parseFloat(stdout.trim());
-        if (!isNaN(parsed)) {
-          duration = Math.round(parsed);
-        }
+        duration = parseDurationValue(stdout);
       }
       task.resolve(duration);
       processFfprobeQueue();
@@ -410,10 +466,11 @@ export async function scanAllLibraries() {
         title = cleanFilenameTitle(filename, ext);
       }
 
-      let duration = 120;
+      let duration = 0;
       if (nfo && nfo.runtime && nfo.runtime > 0) {
         duration = nfo.runtime;
-      } else {
+      }
+      if (!duration || duration === 0) {
         duration = await getDuration(file);
       }
 
@@ -624,10 +681,10 @@ export async function scanAllLibraries() {
       scannedMusicIndex.set(id, file);
 
       const stat = fs.statSync(file);
-      let duration = 120;
+      let duration = 0;
 
       const cachedItem = existingMusicMap.get(relativePath);
-      if (cachedItem && cachedItem.size === stat.size) {
+      if (cachedItem && cachedItem.size === stat.size && cachedItem.duration && cachedItem.duration > 0 && cachedItem.duration !== 120) {
         duration = cachedItem.duration;
       } else {
         duration = await getDuration(file);

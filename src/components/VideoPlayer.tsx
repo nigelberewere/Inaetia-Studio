@@ -119,9 +119,6 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsBuffering(false);
-        if (savedPositionRef.current && savedPositionRef.current > 10) {
-          video.currentTime = savedPositionRef.current;
-        }
         video.play().catch(() => {});
       });
 
@@ -256,13 +253,8 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
         if (res.ok) {
           const history = await res.json();
           const savedRecord = history.find((h: any) => h.movieId === movie.id);
-          if (savedRecord && savedRecord.position > 10 && !savedRecord.completed) {
+          if (savedRecord && savedRecord.position > 15 && !savedRecord.completed) {
             savedPositionRef.current = savedRecord.position;
-            const video = videoRef.current;
-            if (video) {
-              video.currentTime = savedRecord.position;
-              setCurrentTime(savedRecord.position);
-            }
             setResumeTime(savedRecord.position);
             setShowResumeToast(true);
           }
@@ -276,6 +268,16 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
 
     fetchSavedPosition();
   }, [movie.id, currentProfile]);
+
+  // Auto-dismiss resume toast after 8s if user doesn't interact
+  useEffect(() => {
+    if (showResumeToast) {
+      const timer = setTimeout(() => {
+        setShowResumeToast(false);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [showResumeToast]);
 
   // Handle Controls Visibility Timeout
   const triggerControlsVisibility = () => {
@@ -540,16 +542,23 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
   // Video Events
   const handleTimeUpdate = () => {
     const video = videoRef.current;
-    if (video && !isDragging) {
-      const current = video.currentTime;
-      setCurrentTime(current);
+    if (video) {
+      if (!isDragging) {
+        const current = video.currentTime;
+        setCurrentTime(current);
+      }
+      if (isFinite(video.duration) && video.duration > 0 && Math.abs(video.duration - duration) > 1) {
+        setDuration(video.duration);
+      }
     }
   };
 
   const handleLoadedMetadata = () => {
     const video = videoRef.current;
     if (video) {
-      setDuration(video.duration);
+      if (isFinite(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
       setIsBuffering(false);
     }
   };
@@ -620,9 +629,8 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
             <button
               onClick={() => {
                 setShowResumeToast(false);
-                const video = videoRef.current;
-                if (video && video.paused) {
-                  video.play().catch(console.error);
+                if (resumeTime !== null) {
+                  performSeek(resumeTime);
                 }
               }}
               className="flex-1 py-2 bg-cinema-amber hover:bg-amber-600 text-cinema-bg rounded-lg active:scale-95 transition-all cursor-pointer"
@@ -632,15 +640,8 @@ export default function VideoPlayer({ movie }: VideoPlayerProps) {
             </button>
             <button
               onClick={() => {
-                const video = videoRef.current;
-                if (video) {
-                  video.currentTime = 0;
-                  setCurrentTime(0);
-                  if (video.paused) {
-                    video.play().catch(console.error);
-                  }
-                }
                 setShowResumeToast(false);
+                performSeek(0);
               }}
               className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg active:scale-95 transition-all cursor-pointer"
               id="btn-video-start-over"
