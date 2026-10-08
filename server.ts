@@ -1,7 +1,13 @@
+import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+
+// Ensure .env is loaded from the project root if process.cwd() or environment differs
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+
 import {
   getPathsConfig,
   ensureDirs,

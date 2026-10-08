@@ -185,6 +185,7 @@ After=network.target
 Type=simple
 User=$SERVICE_USER
 WorkingDirectory=$INSTALL_DIR
+EnvironmentFile=-$INSTALL_DIR/.env
 ExecStart=$(which node) dist/server.cjs
 Restart=always
 Environment=NODE_ENV=production PORT=3000

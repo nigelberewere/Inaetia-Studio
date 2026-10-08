@@ -81,6 +81,72 @@ export function findShowArtworkPath(filepath: string, artType: "poster" | "fanar
   return null;
 }
 
+export function findSeasonArtworkPath(filepath: string, seasonInput: string): string | null {
+  if (!filepath || !fs.existsSync(filepath)) return null;
+
+  const dir = path.dirname(filepath);
+  const parentDir = path.dirname(dir);
+  const gpDir = path.dirname(parentDir);
+
+  const candidateDirs: string[] = [dir];
+  if (parentDir && parentDir !== dir) candidateDirs.push(parentDir);
+  if (gpDir && gpDir !== parentDir) candidateDirs.push(gpDir);
+
+  const numMatch = seasonInput ? seasonInput.match(/\d+/) : null;
+  const seasonNum = numMatch ? parseInt(numMatch[0], 10) : null;
+  const pad2 = seasonNum !== null ? String(seasonNum).padStart(2, "0") : null;
+  const numStr = seasonNum !== null ? String(seasonNum) : null;
+
+  const imageExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+
+  const targetNames: string[] = [];
+  if (pad2) {
+    targetNames.push(`season${pad2}-poster`, `season${pad2}`, `season-${pad2}-poster`, `season-${pad2}`);
+  }
+  if (numStr) {
+    targetNames.push(`season${numStr}-poster`, `season${numStr}`, `season-${numStr}-poster`, `season-${numStr}`);
+  }
+
+  for (const cDir of candidateDirs) {
+    if (!fs.existsSync(cDir)) continue;
+    try {
+      const files = fs.readdirSync(cDir);
+
+      // 1. Direct season filename match (e.g. season01-poster.jpg, season1.png)
+      for (const f of files) {
+        const ext = path.extname(f).toLowerCase();
+        if (!imageExtensions.includes(ext)) continue;
+        const base = path.basename(f, ext).toLowerCase();
+        if (targetNames.includes(base)) {
+          return path.join(cDir, f);
+        }
+      }
+
+      // 2. Folder specific check if this directory is dedicated to this season
+      const dirBase = path.basename(cDir).toLowerCase();
+      const isSeasonDir = 
+        (numStr && (dirBase === `season ${numStr}` || dirBase === `season${numStr}`)) ||
+        (pad2 && (dirBase === `season ${pad2}` || dirBase === `season${pad2}`)) ||
+        (seasonInput && dirBase.includes(seasonInput.toLowerCase())) ||
+        dirBase.includes("season") ||
+        dirBase.includes("book");
+
+      if (isSeasonDir) {
+        for (const f of files) {
+          const ext = path.extname(f).toLowerCase();
+          if (!imageExtensions.includes(ext)) continue;
+          const base = path.basename(f, ext).toLowerCase();
+          if (["poster", "folder", "cover"].includes(base)) {
+            return path.join(cDir, f);
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
 let activeRemuxCount = 0;
 const MAX_REMUX_STREAMS = 2;
 
@@ -420,6 +486,70 @@ router.get("/api/show-poster/:name", async (req, res) => {
     res.setHeader("Content-Type", getMimeType(ext));
     res.setHeader("Cache-Control", "public, max-age=86400");
     return fs.createReadStream(individualArt.thumb).pipe(res);
+  }
+
+  if (targetEpisodeId) {
+    return res.redirect(`/api/thumbnail/${targetEpisodeId}`);
+  }
+
+  res.setHeader("Content-Type", "image/gif");
+  return res.end(TRANSPARENT_GIF);
+});
+
+// GET /api/season-poster/:name/:season
+router.get("/api/season-poster/:name/:season", async (req, res) => {
+  const showName = decodeURIComponent(req.params.name || "");
+  const season = decodeURIComponent(req.params.season || "");
+  const firstEpisodeId = req.query.firstEpisodeId as string | undefined;
+
+  let filepath: string | undefined;
+  let targetEpisodeId: string | undefined;
+
+  if (firstEpisodeId) {
+    filepath = moviesIndex.get(firstEpisodeId);
+    if (filepath && fs.existsSync(filepath)) {
+      targetEpisodeId = firstEpisodeId;
+    }
+  }
+
+  if (!filepath) {
+    const norm = normalizeSeriesName(showName);
+    const ep = moviesCache.find(
+      (m) =>
+        ((m.showName && normalizeSeriesName(m.showName) === norm) ||
+         (m.showTitle && normalizeSeriesName(m.showTitle) === norm) ||
+         (m.title && normalizeSeriesName(m.title) === norm)) &&
+        (!season || (m.seasonName && m.seasonName.toLowerCase() === season.toLowerCase()))
+    ) || moviesCache.find(
+      (m) =>
+        (m.showName && normalizeSeriesName(m.showName) === norm) ||
+        (m.showTitle && normalizeSeriesName(m.showTitle) === norm) ||
+        (m.title && normalizeSeriesName(m.title) === norm)
+    );
+    if (ep) {
+      filepath = moviesIndex.get(ep.id);
+      if (filepath && fs.existsSync(filepath)) {
+        targetEpisodeId = ep.id;
+      }
+    }
+  }
+
+  if (filepath && fs.existsSync(filepath)) {
+    const seasonArt = findSeasonArtworkPath(filepath, season);
+    if (seasonArt && fs.existsSync(seasonArt)) {
+      const ext = path.extname(seasonArt).toLowerCase();
+      res.setHeader("Content-Type", getMimeType(ext));
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return fs.createReadStream(seasonArt).pipe(res);
+    }
+
+    const posterPath = findShowArtworkPath(filepath, "poster");
+    if (posterPath && fs.existsSync(posterPath)) {
+      const ext = path.extname(posterPath).toLowerCase();
+      res.setHeader("Content-Type", getMimeType(ext));
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return fs.createReadStream(posterPath).pipe(res);
+    }
   }
 
   if (targetEpisodeId) {

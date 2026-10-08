@@ -57,7 +57,7 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-5xl glass-panel border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-6 backdrop-saturate-150"
+        className="relative w-full max-w-[1550px] 2xl:max-w-[1650px] mx-auto glass-panel border border-white/15 rounded-3xl overflow-hidden shadow-2xl flex flex-col my-4 sm:my-6 backdrop-saturate-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Full-Bleed Fanart Header */}
@@ -208,34 +208,57 @@ export default function MovieDetailModal({ movie, onClose }: MovieDetailModalPro
 
               {/* Filmmakers & Studio Row */}
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-cinema-muted pt-2 border-t border-white/10">
-                {(activeMovie.directors?.length || activeMovie.director) && (
-                  <div>
-                    <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Director:</span>
-                    <span className="font-semibold text-white">
-                      {activeMovie.directors && activeMovie.directors.length > 0
-                        ? activeMovie.directors.join(", ")
-                        : activeMovie.director}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const rawDirs = (activeMovie.directors && activeMovie.directors.length > 0)
+                    ? activeMovie.directors
+                    : (activeMovie.director ? [activeMovie.director] : []);
+                  const cleanDirs = rawDirs
+                    .map((d: any) => typeof d === "string" ? d : (d?.name || ""))
+                    .filter((d: string) => d && !d.includes("[object"));
+                  if (cleanDirs.length === 0) return null;
+                  return (
+                    <div>
+                      <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Director:</span>
+                      <span className="font-semibold text-white">
+                        {cleanDirs.join(", ")}
+                      </span>
+                    </div>
+                  );
+                })()}
 
-                {activeMovie.writers && activeMovie.writers.length > 0 && (
-                  <div>
-                    <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Writer:</span>
-                    <span className="font-medium text-cinema-text">
-                      {activeMovie.writers.join(", ")}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const rawWriters = activeMovie.writers || [];
+                  const cleanWriters = rawWriters
+                    .map((w: any) => typeof w === "string" ? w : (w?.name || ""))
+                    .filter((w: string) => w && !w.includes("[object"));
+                  if (cleanWriters.length === 0) return null;
+                  return (
+                    <div>
+                      <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Writer:</span>
+                      <span className="font-medium text-cinema-text">
+                        {cleanWriters.join(", ")}
+                      </span>
+                    </div>
+                  );
+                })()}
 
-                {(activeMovie.studio || (activeMovie.studios && activeMovie.studios.length > 0)) && (
-                  <div>
-                    <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Studio:</span>
-                    <span className="font-medium text-cinema-text">
-                      {activeMovie.studio || activeMovie.studios?.join(", ")}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const rawStudios = (activeMovie.studios && activeMovie.studios.length > 0)
+                    ? activeMovie.studios
+                    : (activeMovie.studio ? [activeMovie.studio] : []);
+                  const cleanStudios = rawStudios
+                    .map((s: any) => typeof s === "string" ? s : (s?.name || ""))
+                    .filter((s: string) => s && !s.includes("[object"));
+                  if (cleanStudios.length === 0) return null;
+                  return (
+                    <div>
+                      <span className="font-bold text-cinema-muted/80 uppercase tracking-wider mr-1.5">Studio:</span>
+                      <span className="font-medium text-cinema-text">
+                        {cleanStudios.join(", ")}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Cast & Crew Avatars Row */}

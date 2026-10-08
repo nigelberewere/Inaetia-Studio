@@ -68,6 +68,25 @@ function extractStringFromXmlTag(tagValue: any): string | null {
     if (tagValue.text !== undefined) {
       return extractStringFromXmlTag(tagValue.text);
     }
+    if (tagValue.name !== undefined) {
+      return extractStringFromXmlTag(tagValue.name);
+    }
+    if (tagValue.title !== undefined) {
+      return extractStringFromXmlTag(tagValue.title);
+    }
+    if (tagValue._ !== undefined) {
+      return extractStringFromXmlTag(tagValue._);
+    }
+  }
+  return null;
+}
+
+export function safeStringVal(val: any): string | null {
+  if (!val) return null;
+  const str = extractStringFromXmlTag(val);
+  if (str && !str.includes("[object Object]")) {
+    const trimmed = str.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
   return null;
 }
@@ -583,23 +602,23 @@ export function parseNfoFromString(content: string): MovieMetadata | null {
 
     return {
       title,
-      originalTitle: root.originaltitle ? String(extractStringFromXmlTag(root.originaltitle) || root.originaltitle).trim() : null,
+      originalTitle: safeStringVal(root.originaltitle),
       year,
       rating,
       votes,
       mpaa: rawMpaa,
       runtime: runtimeSeconds,
-      plot: root.plot ? String(extractStringFromXmlTag(root.plot) || root.plot).trim() : null,
-      tagline: root.tagline ? String(extractStringFromXmlTag(root.tagline) || root.tagline).trim() : null,
+      plot: safeStringVal(root.plot),
+      tagline: safeStringVal(root.tagline),
       genres,
-      studio: studios.length > 0 ? studios[0] : (root.studio ? String(extractStringFromXmlTag(root.studio) || root.studio).trim() : null),
+      studio: studios.length > 0 ? studios[0] : safeStringVal(root.studio),
       studios,
-      director: directors.length > 0 ? directors.join(", ") : (root.director ? String(extractStringFromXmlTag(root.director) || root.director).trim() : null),
+      director: directors.length > 0 ? directors.join(", ") : safeStringVal(root.director),
       directors,
       writers,
       actors,
-      trailer: root.trailer ? String(extractStringFromXmlTag(root.trailer) || root.trailer).trim() : null,
-      aired: root.aired ? String(extractStringFromXmlTag(root.aired) || root.aired).trim() : null,
+      trailer: safeStringVal(root.trailer),
+      aired: safeStringVal(root.aired),
       season: root.season ? parseInt(String(extractStringFromXmlTag(root.season) || root.season), 10) || null : null,
       episode: root.episode ? parseInt(String(extractStringFromXmlTag(root.episode) || root.episode), 10) || null : null,
       set,

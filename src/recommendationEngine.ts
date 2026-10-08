@@ -50,11 +50,14 @@ function getItemMetadata(movie: Movie) {
 
   const actors = movie.actors ? movie.actors.map((a) => a.name.trim()).filter(Boolean) : [];
   
-  const directors = movie.directors && movie.directors.length > 0
+  const rawDirs = (movie.directors && movie.directors.length > 0)
     ? movie.directors
-    : (movie.director
-      ? movie.director.split(/[,/]/).map((d) => d.trim()).filter(Boolean)
-      : []);
+    : (movie.director ? [movie.director] : []);
+  const directors = rawDirs
+    .map((d: any) => (typeof d === "string" ? d : (d?.name || "")))
+    .flatMap((d: string) => d.split(/[,/]/))
+    .map((d: string) => d.trim())
+    .filter((d: string) => d && !d.includes("[object"));
 
   const studio = movie.studio || (movie.studios && movie.studios[0]) || movie.showStudio || null;
 
@@ -863,7 +866,7 @@ export function getSimilarMovies(
     if (matchedFactors.collection) {
       const colName = matchedFactors.collection.replace(/\bcollection\b/gi, "").trim();
       matchReason = colName ? `Part of ${colName}` : "Same Collection";
-    } else if (matchedFactors.directors && matchedFactors.directors.length > 0) {
+    } else if (matchedFactors.directors && matchedFactors.directors.length > 0 && !String(matchedFactors.directors[0]).includes("[object")) {
       matchReason = `Directed by ${matchedFactors.directors[0]}`;
     } else if (matchedLeadWithLead.length > 0) {
       matchReason = `Starring ${formatCapitalized(matchedLeadWithLead[0])}`;
